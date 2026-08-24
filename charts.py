@@ -176,12 +176,16 @@ def grafico_donut(gastos_categoria):
             labels=categorias, values=valores, hole=0.62,
             sort=False, textinfo="percent", textfont=dict(color=BLANCO, size=13),
             marker=dict(colors=colores_ciclados, line=dict(color=PANEL, width=3)),
-            domain=dict(x=[0.1, 0.9], y=[0.28, 1]),
+            # El donut va del lado izquierdo y la leyenda al costado derecho
+            # (no debajo): así se leen las categorías al mismo tiempo que se
+            # mira la porción correspondiente, en vez de tener que bajar la
+            # vista a una lista aparte.
+            domain=dict(x=[0, 0.56], y=[0, 1]),
             hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent:.1%}<extra></extra>",
         ))
         fig.add_annotation(
             text=f"<b>${total:,.0f}</b><br><span style='font-size:12px;color:{TEXTO_SECUNDARIO}'>Total gastado</span>",
-            x=0.5, y=0.64, showarrow=False, font=dict(size=19, color=BLANCO),
+            x=0.28, y=0.5, showarrow=False, font=dict(size=19, color=BLANCO),
         )
     else:
         fig.add_annotation(text="Sin gastos registrados", x=0.5, y=0.5, showarrow=False,
@@ -189,10 +193,10 @@ def grafico_donut(gastos_categoria):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=500,
+        height=420,
         margin=dict(l=10, r=10, t=10, b=10),
         showlegend=True,
-        legend=dict(orientation="v", yanchor="top", y=0.24, xanchor="center", x=0.5, font=dict(color=TEXTO, size=12)),
+        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=0.62, font=dict(color=TEXTO, size=13)),
     )
     return fig
 

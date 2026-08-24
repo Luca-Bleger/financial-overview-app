@@ -27,6 +27,13 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* Letra más grande en toda la app: al ser el tamaño base (rem), todo lo
+       que ya está definido en rem (botones, métricas, títulos) crece con
+       esto también, además del texto que usa el tamaño por default de
+       Streamlit (párrafos, tablas, tabs, inputs). */
+    html { font-size: 18px; }
+    small { font-size: 0.95rem !important; }
+
     .block-container { padding-top: 2rem; max-width: 1600px; animation: fadeSlideUp 0.5s ease-out; }
 
     @keyframes fadeSlideUp {
@@ -57,6 +64,23 @@ st.markdown("""
        secciones reales de un dashboard, no subtítulos menores. */
     div[data-testid="stVerticalBlockBorderWrapper"] h5 {
         font-size: 1.3rem !important;
+    }
+
+    /* Consejos (pestaña Consejos): mismo lenguaje visual que las tarjetas,
+       con un realce al pasar el mouse para que se sientan "presionables". */
+    div[data-testid="stExpander"] {
+        background-color: #152033;
+        border-color: #263752 !important;
+        border-radius: 12px !important;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        margin-bottom: 8px;
+    }
+    div[data-testid="stExpander"]:hover {
+        border-color: #67D2D0 !important;
+        box-shadow: 0 6px 18px rgba(103, 210, 208, 0.10);
+    }
+    div[data-testid="stExpander"] summary {
+        font-size: 1.05rem;
     }
 
     /* Inputs numéricos (proyección de ahorro): letra más grande, más fácil
@@ -113,9 +137,9 @@ st.markdown("""
         box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     }
     div[data-testid="stButton"] button[kind="primary"] {
-        font-size: 1.2rem;
+        font-size: 1.35rem;
         font-weight: 700;
-        padding: 0.8rem 1.2rem;
+        padding: 0.9rem 1.3rem;
     }
 
     /* Fondo decorativo de la pantalla inicial: dos manchas de gradiente
@@ -348,7 +372,7 @@ if st.session_state.vista == "portada":
         </div>
     """, unsafe_allow_html=True)
 
-    _, col_centro, _ = st.columns([1, 1.4, 1])
+    _, col_centro, _ = st.columns([1, 1.8, 1])
     with col_centro:
         if st.button("Comenzar →", width="stretch", type="primary", key="btn_portada"):
             st.session_state.vista = "inicio"
@@ -663,15 +687,16 @@ with tab_categorias:
         st.plotly_chart(grafico_tasa_ahorro(resumen), width="stretch")
 
 with tab_consejos:
-    st.caption("Generados automáticamente a partir de tus datos — sin IA externa, sin costo.")
+    st.caption(
+        "Generados automáticamente a partir de tus datos — sin IA externa, sin costo. "
+        "Tocá cualquiera para ver más detalle."
+    )
     insights = generar_insights(df_movimientos, df_solo_gastos, resumen, periodo_seleccionado)
+    icono_por_tipo = {"positivo": "✅", "alerta": "⚠️", "info": "ℹ️"}
     for item in insights:
-        if item["tipo"] == "positivo":
-            st.success(item["mensaje"])
-        elif item["tipo"] == "alerta":
-            st.warning(item["mensaje"])
-        else:
-            st.info(item["mensaje"])
+        icono = icono_por_tipo[item["tipo"]]
+        with st.expander(f"{icono} {item['mensaje']}"):
+            st.markdown(item["detalle"])
 
 with tab_preguntas:
     st.caption(
