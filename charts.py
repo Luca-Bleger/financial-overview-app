@@ -172,26 +172,28 @@ def grafico_donut(gastos_categoria):
         # en vez de recortar (dejando slices sin color), se cicla desde el
         # principio para que ninguna porción quede sin asignar.
         colores_ciclados = [COLORES_CATEGORIA[i % len(COLORES_CATEGORIA)] for i in range(len(categorias))]
+        # El porcentaje va en la leyenda, no flotando sobre/alrededor de las
+        # porciones: con varias categorías chicas juntas, cualquier texto
+        # pegado al anillo (adentro o afuera con línea guía) terminaba
+        # amontonado o ilegible. En la leyenda, cada categoría tiene su
+        # propio renglón sin importar qué tan chica sea la porción.
+        porcentajes = [v / total * 100 if total else 0 for v in valores]
+        etiquetas_leyenda = [f"{cat}  ({pct:.1f}%)" for cat, pct in zip(categorias, porcentajes)]
         fig.add_trace(go.Pie(
-            labels=categorias, values=valores, hole=0.62,
-            sort=False,
-            # "outside" con línea guía separa las porciones chicas entre sí
-            # (con "inside" quedaban todos los números amontonados/pisándose
-            # cuando había varias porciones pequeñas juntas, como pasaba acá).
-            textinfo="percent", textposition="outside",
-            textfont=dict(color=BLANCO, size=15),
-            outsidetextfont=dict(color=BLANCO, size=15),
+            labels=etiquetas_leyenda, values=valores, hole=0.62,
+            sort=False, textinfo="none",
             marker=dict(colors=colores_ciclados, line=dict(color=PANEL, width=3)),
             # El donut va del lado izquierdo y la leyenda al costado derecho
             # (no debajo): así se leen las categorías al mismo tiempo que se
             # mira la porción correspondiente, en vez de tener que bajar la
             # vista a una lista aparte.
-            domain=dict(x=[0.05, 0.5], y=[0.08, 0.92]),
-            hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent:.1%}<extra></extra>",
+            domain=dict(x=[0.03, 0.52], y=[0.05, 0.95]),
+            customdata=categorias,
+            hovertemplate="<b>%{customdata}</b><br>$%{value:,.0f}<br>%{percent:.1%}<extra></extra>",
         ))
         fig.add_annotation(
-            text=f"<b>${total:,.0f}</b><br><span style='font-size:12px;color:{TEXTO_SECUNDARIO}'>Total gastado</span>",
-            x=0.275, y=0.5, showarrow=False, font=dict(size=19, color=BLANCO),
+            text=f"<b>${total:,.0f}</b><br><span style='font-size:13px;color:{TEXTO_SECUNDARIO}'>Total gastado</span>",
+            x=0.275, y=0.5, showarrow=False, font=dict(size=21, color=BLANCO),
         )
     else:
         fig.add_annotation(text="Sin gastos registrados", x=0.5, y=0.5, showarrow=False,
@@ -199,10 +201,13 @@ def grafico_donut(gastos_categoria):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=560,
+        height=580,
         margin=dict(l=10, r=10, t=10, b=10),
         showlegend=True,
-        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=0.68, font=dict(color=TEXTO, size=15)),
+        legend=dict(
+            orientation="v", yanchor="middle", y=0.5, xanchor="left", x=0.58,
+            font=dict(color=TEXTO, size=17), itemwidth=40, tracegroupgap=6,
+        ),
     )
     return fig
 

@@ -65,16 +65,34 @@ st.markdown("""
     div[data-testid="stMetric"] {
         background-color: #152033;
         border: 1px solid #263752;
+        border-left: 5px solid #67D2D0;
         border-radius: 10px;
-        padding: 18px 20px;
+        padding: 24px 26px;
         transition: border-color 0.2s ease, transform 0.2s ease;
     }
     div[data-testid="stMetric"]:hover {
         border-color: #67D2D0;
         transform: translateY(-2px);
     }
-    div[data-testid="stMetricLabel"] { color: #8FA1BC; font-size: 1rem; }
-    div[data-testid="stMetricValue"] { font-size: 2.1rem; }
+    div[data-testid="stMetricLabel"] { color: #8FA1BC; font-size: 1.15rem; }
+    div[data-testid="stMetricValue"] { font-size: 2.7rem !important; font-weight: 800; }
+    div[data-testid="stMetricDelta"] { font-size: 1.15rem !important; }
+
+    /* Un color distinto de borde izquierdo por KPI (Ingresos/Gastos/Saldo/
+       Tasa de ahorro), para que se distingan de un vistazo en vez de ser
+       cuatro tarjetas idénticas. */
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(1) div[data-testid="stMetric"] {
+        border-left-color: #8B95F6 !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) div[data-testid="stMetric"] {
+        border-left-color: #FF8194 !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(3) div[data-testid="stMetric"] {
+        border-left-color: #67D2D0 !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(4) div[data-testid="stMetric"] {
+        border-left-color: #FFAB5C !important;
+    }
 
     /* Títulos de sección (##### dentro de las tarjetas): un poco más
        grandes que el default de Streamlit para que se sientan como
