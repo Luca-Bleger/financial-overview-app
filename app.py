@@ -137,9 +137,9 @@ st.markdown("""
         box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     }
     div[data-testid="stButton"] button[kind="primary"] {
-        font-size: 1.35rem;
-        font-weight: 700;
-        padding: 0.9rem 1.3rem;
+        font-size: 1.75rem;
+        font-weight: 800;
+        padding: 1rem 1.4rem;
     }
 
     /* Fondo decorativo de la pantalla inicial: dos manchas de gradiente
