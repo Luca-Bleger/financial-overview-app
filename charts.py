@@ -193,7 +193,8 @@ def grafico_donut(gastos_categoria):
         ))
         fig.add_annotation(
             text=f"<b>${total:,.0f}</b><br><span style='font-size:13px;color:{TEXTO_SECUNDARIO}'>Total gastado</span>",
-            x=0.275, y=0.5, showarrow=False, font=dict(size=21, color=BLANCO),
+            x=0.275, y=0.5, xref="paper", yref="paper", xanchor="center", yanchor="middle",
+            showarrow=False, font=dict(size=21, color=BLANCO),
         )
     else:
         fig.add_annotation(text="Sin gastos registrados", x=0.5, y=0.5, showarrow=False,

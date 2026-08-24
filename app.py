@@ -906,6 +906,54 @@ with tab_proyeccion:
     )
 
     with st.container(border=True):
+        st.markdown("##### 📅 Planificar el próximo mes")
+        st.caption(
+            "Ingresá cuánto esperás ganar y gastar este mes, y te mostramos cómo se distribuiría "
+            "según tu patrón histórico de gastos por categoría."
+        )
+
+        promedio_ingreso_historico = resumen["Ingreso"].mean() if not resumen.empty else 0.0
+        promedio_gasto_historico = resumen["Gasto"].mean() if not resumen.empty else 0.0
+
+        col_ing_plan, col_gas_plan = st.columns(2)
+        with col_ing_plan:
+            ingreso_plan = st.number_input(
+                "Ingresos esperados este mes ($)", min_value=0.0, step=10000.0,
+                value=float(round(promedio_ingreso_historico, -2)), key="ingreso_plan",
+            )
+        with col_gas_plan:
+            gasto_plan = st.number_input(
+                "Gastos totales esperados este mes ($)", min_value=0.0, step=10000.0,
+                value=float(round(promedio_gasto_historico, -2)), key="gasto_plan",
+            )
+
+        distribucion_historica = df_solo_gastos.groupby("categoria")["importe"].sum()
+        distribucion_historica = distribucion_historica[distribucion_historica > 0].sort_values(ascending=False)
+        total_historico = distribucion_historica.sum()
+
+        if total_historico > 0 and gasto_plan > 0:
+            st.markdown(f"Con base en tu historial, así se distribuirían tus **${gasto_plan:,.0f}** de gastos:")
+            for categoria, monto_historico in distribucion_historica.items():
+                porcentaje = monto_historico / total_historico
+                monto_sugerido = porcentaje * gasto_plan
+                st.progress(min(porcentaje, 1.0), text=f"{categoria} — ${monto_sugerido:,.0f} ({porcentaje * 100:.0f}%)")
+
+            saldo_plan = ingreso_plan - gasto_plan
+            tasa_plan = (saldo_plan / ingreso_plan * 100) if ingreso_plan else 0
+            if saldo_plan >= 0:
+                st.success(
+                    f"Con estos números, terminarías el mes con **${saldo_plan:,.0f}** de saldo "
+                    f"(tasa de ahorro proyectada: {tasa_plan:.1f}%)."
+                )
+            else:
+                st.warning(
+                    f"Con estos números, terminarías el mes en **-${abs(saldo_plan):,.0f}** — los "
+                    "gastos esperados superan los ingresos."
+                )
+        else:
+            st.caption("Cargá algún gasto categorizado (subiendo un resumen) para ver la distribución sugerida.")
+
+    with st.container(border=True):
         st.markdown("##### 🎯 ¿Cuánto necesito ahorrar para comprar algo?")
 
         col_monto, col_plazo = st.columns(2)
