@@ -24,14 +24,70 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 2rem; max-width: 1200px; }
+    .block-container { padding-top: 2rem; max-width: 1200px; animation: fadeSlideUp 0.5s ease-out; }
+
+    @keyframes fadeSlideUp {
+        from { opacity: 0; transform: translateY(14px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
     div[data-testid="stMetric"] {
         background-color: #152033;
         border: 1px solid #263752;
         border-radius: 10px;
         padding: 14px 16px;
+        transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+    div[data-testid="stMetric"]:hover {
+        border-color: #67D2D0;
+        transform: translateY(-2px);
     }
     div[data-testid="stMetricLabel"] { color: #8FA1BC; }
+
+    /* Tarjetas (st.container(border=True)): mismo lenguaje visual que los
+       gráficos de Plotly (mismo fondo/borde), con un realce sutil al pasar
+       el mouse para que se sientan interactivas. */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #152033;
+        border-color: #263752 !important;
+        border-radius: 14px !important;
+        transition: border-color 0.25s ease, box-shadow 0.25s ease;
+        animation: fadeIn 0.6s ease-out;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(button):hover {
+        border-color: #67D2D0 !important;
+        box-shadow: 0 8px 24px rgba(103, 210, 208, 0.12);
+    }
+
+    /* Botones: efecto de elevación suave al pasar el mouse/tocar */
+    div[data-testid="stButton"] button {
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    div[data-testid="stButton"] button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+
+    .hero-titulo {
+        font-size: 2.3rem;
+        font-weight: 800;
+        margin-bottom: 0;
+        background: linear-gradient(90deg, #F8FAFC 0%, #8FA1BC 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .hero-accent {
+        height: 4px;
+        width: 64px;
+        border-radius: 4px;
+        margin: 10px 0 18px 0;
+        background: linear-gradient(90deg, #8B95F6, #67D2D0);
+    }
 
     /* Streamlit no apila st.columns solo en pantallas angostas: sin esto,
        cada columna queda apretada a una fracción del ancho del celular
@@ -63,35 +119,44 @@ if "usar_ejemplo" not in st.session_state:
 # =========================================================
 
 if st.session_state.vista == "inicio":
-    st.markdown("## 💰 Financial Overview")
-    st.caption("Tu panel personal de análisis financiero")
+    st.markdown('<div class="hero-titulo">💰 Financial Overview</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-accent"></div>', unsafe_allow_html=True)
+    st.caption("Tu panel personal de análisis financiero — sin subir nada, sin cuentas, sin IA de por medio.")
+
     st.markdown("#### ¿Qué querés hacer?")
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📤  Analizar mis movimientos", width="stretch", type="primary"):
-            st.session_state.vista = "cargar"
-            st.session_state.usar_ejemplo = False
-            st.rerun()
-        st.caption("Subí tu resumen bancario o de Mercado Pago (CSV, Excel o PDF) y generá tu dashboard.")
+        with st.container(border=True):
+            st.markdown("##### 📤 Analizar mis movimientos")
+            st.caption("Subí tu resumen bancario o de Mercado Pago (CSV, Excel o PDF) y generá tu dashboard.")
+            if st.button("Empezar", width="stretch", type="primary", key="btn_analizar"):
+                st.session_state.vista = "cargar"
+                st.session_state.usar_ejemplo = False
+                st.rerun()
     with col2:
-        if st.button("🧪  Probar con datos de ejemplo", width="stretch"):
-            st.session_state.vista = "cargar"
-            st.session_state.usar_ejemplo = True
-            st.rerun()
-        st.caption("Mirá cómo funciona la app con datos ficticios, sin subir ningún archivo tuyo.")
+        with st.container(border=True):
+            st.markdown("##### 🧪 Probar con datos de ejemplo")
+            st.caption("Mirá cómo funciona la app con datos ficticios, sin subir ningún archivo tuyo.")
+            if st.button("Ver demo", width="stretch", key="btn_demo"):
+                st.session_state.vista = "cargar"
+                st.session_state.usar_ejemplo = True
+                st.rerun()
 
-    st.markdown("---")
+    st.markdown("#####  ")
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown("#### 📊 Varios análisis")
-        st.caption("Evolución financiera, gastos por categoría, tasa de ahorro y tus mayores gastos del mes.")
+        with st.container(border=True):
+            st.markdown("##### 📊 Varios análisis")
+            st.caption("Evolución financiera, gastos por categoría, tasa de ahorro y tus mayores gastos del mes.")
     with c2:
-        st.markdown("#### 🧠 Consejos automáticos")
-        st.caption("Detecta aumentos, categorías nuevas y meses de ahorro flojo, sin IA externa ni costos.")
+        with st.container(border=True):
+            st.markdown("##### 🧠 Consejos automáticos")
+            st.caption("Detecta aumentos, categorías nuevas y meses de ahorro flojo, sin IA externa ni costos.")
     with c3:
-        st.markdown("#### 🏷️ Clasificación de gastos")
-        st.caption("Categoriza automáticamente por palabras clave, y corregís lo que haga falta a mano.")
+        with st.container(border=True):
+            st.markdown("##### 🏷️ Clasificación de gastos")
+            st.caption("Categoriza automáticamente por palabras clave, y corregís lo que haga falta a mano.")
 
     st.stop()
 
@@ -253,14 +318,14 @@ else:
 # =========================================================
 
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("Ingresos", f"${ingresos_actual:,.0f}",
+k1.metric("💰 Ingresos", f"${ingresos_actual:,.0f}",
           f"{variacion_ingresos:+.1f}%" if variacion_ingresos is not None else None)
-k2.metric("Gastos", f"${gastos_actual:,.0f}",
+k2.metric("💸 Gastos", f"${gastos_actual:,.0f}",
           f"{variacion_gastos:+.1f}%" if variacion_gastos is not None else None,
           delta_color="inverse")
-k3.metric("Saldo", f"${saldo_actual:,.0f}",
+k3.metric("🏦 Saldo", f"${saldo_actual:,.0f}",
           f"{variacion_saldo:+.1f}%" if variacion_saldo is not None else None)
-k4.metric("Tasa de ahorro", f"{tasa_ahorro:.1f}%")
+k4.metric("📈 Tasa de ahorro", f"{tasa_ahorro:.1f}%")
 
 
 # =========================================================
@@ -272,22 +337,27 @@ tab_resumen, tab_categorias, tab_consejos, tab_movimientos = st.tabs(
 )
 
 with tab_resumen:
-    st.markdown("##### Evolución financiera")
-    st.plotly_chart(grafico_evolucion(resumen), width="stretch")
+    with st.container(border=True):
+        st.markdown("##### 📈 Evolución financiera")
+        st.plotly_chart(grafico_evolucion(resumen), width="stretch")
 
-    st.markdown("##### Gastos por categoría")
-    gastos_cat_actual = gastos_por_categoria(df_solo_gastos, periodo_seleccionado)
-    st.plotly_chart(grafico_donut(gastos_cat_actual), width="stretch")
+    with st.container(border=True):
+        st.markdown("##### 🍩 Gastos por categoría")
+        gastos_cat_actual = gastos_por_categoria(df_solo_gastos, periodo_seleccionado)
+        st.plotly_chart(grafico_donut(gastos_cat_actual), width="stretch")
 
-    st.markdown("##### Mayores gastos individuales del mes")
-    st.plotly_chart(grafico_top_gastos(df_solo_gastos, periodo_seleccionado), width="stretch")
+    with st.container(border=True):
+        st.markdown("##### 🔝 Mayores gastos individuales del mes")
+        st.plotly_chart(grafico_top_gastos(df_solo_gastos, periodo_seleccionado), width="stretch")
 
 with tab_categorias:
     cat_mes = gastos_categoria_por_mes(df_solo_gastos)
-    st.markdown("##### Evolución de gastos por categoría")
-    st.plotly_chart(grafico_categorias_tiempo(cat_mes), width="stretch")
-    st.markdown("##### Tasa de ahorro por mes")
-    st.plotly_chart(grafico_tasa_ahorro(resumen), width="stretch")
+    with st.container(border=True):
+        st.markdown("##### 📊 Evolución de gastos por categoría")
+        st.plotly_chart(grafico_categorias_tiempo(cat_mes), width="stretch")
+    with st.container(border=True):
+        st.markdown("##### 💹 Tasa de ahorro por mes")
+        st.plotly_chart(grafico_tasa_ahorro(resumen), width="stretch")
 
 with tab_consejos:
     st.caption("Generados automáticamente a partir de tus datos — sin IA externa, sin costo.")
@@ -308,26 +378,27 @@ with tab_movimientos:
         | {"Ingresos", "Sin clasificar", "Movimiento interno"}
     )
 
-    editado = st.data_editor(
-        df_periodo[["fecha", "descripcion", "importe", "categoria"]],
-        column_config={
-            "categoria": st.column_config.SelectboxColumn("categoria", options=categorias_existentes),
-            "importe": st.column_config.NumberColumn("importe", format="$%.0f"),
-        },
-        disabled=["fecha", "descripcion", "importe"],
-        width="stretch",
-        hide_index=True,
-        key=f"editor_{periodo_seleccionado}",
-    )
+    with st.container(border=True):
+        editado = st.data_editor(
+            df_periodo[["fecha", "descripcion", "importe", "categoria"]],
+            column_config={
+                "categoria": st.column_config.SelectboxColumn("categoria", options=categorias_existentes),
+                "importe": st.column_config.NumberColumn("importe", format="$%.0f"),
+            },
+            disabled=["fecha", "descripcion", "importe"],
+            width="stretch",
+            hide_index=True,
+            key=f"editor_{periodo_seleccionado}",
+        )
 
-    if not editado["categoria"].equals(df_periodo["categoria"].reset_index(drop=True)):
-        df_movimientos.loc[df_periodo.index, "categoria"] = editado["categoria"].values
-        st.success("Categorías actualizadas. Descargá el CSV corregido abajo para no perder el cambio.")
+        if not editado["categoria"].equals(df_periodo["categoria"].reset_index(drop=True)):
+            df_movimientos.loc[df_periodo.index, "categoria"] = editado["categoria"].values
+            st.success("Categorías actualizadas. Descargá el CSV corregido abajo para no perder el cambio.")
 
-    csv_actualizado = df_movimientos.drop(columns=["mes", "año", "periodo", "tipo"]).to_csv(index=False)
-    st.download_button(
-        "⬇️ Descargar CSV con las categorías corregidas",
-        data=csv_actualizado,
-        file_name="movimientos_corregidos.csv",
-        mime="text/csv",
-    )
+        csv_actualizado = df_movimientos.drop(columns=["mes", "año", "periodo", "tipo"]).to_csv(index=False)
+        st.download_button(
+            "⬇️ Descargar CSV con las categorías corregidas",
+            data=csv_actualizado,
+            file_name="movimientos_corregidos.csv",
+            mime="text/csv",
+        )
