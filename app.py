@@ -4,10 +4,11 @@ import pandas as pd
 import streamlit as st
 
 from data import (
-    FREQ_POR_GRANULARIDAD, MESES_ES, REGLAS_CATEGORIAS, calcular_variacion,
-    construir_movimientos, gastos_categoria_por_mes, gastos_por_categoria,
-    leer_archivo_robusto, mapeo_fijo_pdf_mercadopago, periodo_anterior_de,
-    proyectar_ahorro, resumen_por_granularidad, resumen_por_periodo,
+    FREQ_POR_GRANULARIDAD, MESES_ES, REGLAS_CATEGORIAS, aplicar_correcciones,
+    calcular_variacion, clave_movimiento, construir_movimientos,
+    gastos_categoria_por_mes, gastos_por_categoria, leer_archivo_robusto,
+    mapeo_fijo_pdf_mercadopago, periodo_anterior_de, proyectar_ahorro,
+    resumen_por_granularidad, resumen_por_periodo, sin_clasificar_frecuentes,
     sugerencias_de_mapeo,
 )
 from charts import (
@@ -26,7 +27,7 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 2rem; max-width: 1200px; animation: fadeSlideUp 0.5s ease-out; }
+    .block-container { padding-top: 2rem; max-width: 1600px; animation: fadeSlideUp 0.5s ease-out; }
 
     @keyframes fadeSlideUp {
         from { opacity: 0; transform: translateY(14px); }
@@ -41,14 +42,32 @@ st.markdown("""
         background-color: #152033;
         border: 1px solid #263752;
         border-radius: 10px;
-        padding: 14px 16px;
+        padding: 18px 20px;
         transition: border-color 0.2s ease, transform 0.2s ease;
     }
     div[data-testid="stMetric"]:hover {
         border-color: #67D2D0;
         transform: translateY(-2px);
     }
-    div[data-testid="stMetricLabel"] { color: #8FA1BC; }
+    div[data-testid="stMetricLabel"] { color: #8FA1BC; font-size: 1rem; }
+    div[data-testid="stMetricValue"] { font-size: 2.1rem; }
+
+    /* Títulos de sección (##### dentro de las tarjetas): un poco más
+       grandes que el default de Streamlit para que se sientan como
+       secciones reales de un dashboard, no subtítulos menores. */
+    div[data-testid="stVerticalBlockBorderWrapper"] h5 {
+        font-size: 1.3rem !important;
+    }
+
+    /* Inputs numéricos (proyección de ahorro): letra más grande, más fácil
+       de leer en celular. */
+    div[data-testid="stNumberInput"] input {
+        font-size: 1.3rem !important;
+        font-weight: 600;
+    }
+    div[data-testid="stNumberInput"] label p {
+        font-size: 1rem !important;
+    }
 
     /* Tarjetas (st.container(border=True)): mismo lenguaje visual que los
        gráficos de Plotly (mismo fondo/borde), con un realce sutil al pasar
@@ -82,13 +101,21 @@ st.markdown("""
         border-top: 3px solid #FF8194 !important;
     }
 
-    /* Botones: efecto de elevación suave al pasar el mouse/tocar */
+    /* Botones: efecto de elevación suave al pasar el mouse/tocar, y letra
+       más grande — sobre todo el CTA principal (type="primary"). */
     div[data-testid="stButton"] button {
         transition: transform 0.15s ease, box-shadow 0.15s ease;
+        font-size: 1.05rem;
+        padding: 0.6rem 1.1rem;
     }
     div[data-testid="stButton"] button:hover {
         transform: translateY(-2px);
         box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+    div[data-testid="stButton"] button[kind="primary"] {
+        font-size: 1.2rem;
+        font-weight: 700;
+        padding: 0.8rem 1.2rem;
     }
 
     /* Fondo decorativo de la pantalla inicial: dos manchas de gradiente
@@ -229,38 +256,44 @@ st.markdown("""
         opacity: 0.35;
         animation: flotar-icono 6s ease-in-out infinite;
     }
-    .icono-flotante.i1 { top: 12%; left: 10%; animation-delay: 0s; }
-    .icono-flotante.i2 { top: 18%; right: 12%; animation-delay: 1s; font-size: 2.4rem; }
-    .icono-flotante.i3 { bottom: 20%; left: 14%; animation-delay: 2s; }
-    .icono-flotante.i4 { bottom: 14%; right: 8%; animation-delay: 0.6s; font-size: 2.6rem; }
-    .icono-flotante.i5 { top: 46%; left: 3%; animation-delay: 1.6s; font-size: 1.6rem; }
+    .icono-flotante.i1 { top: 10%; left: 9%; animation-delay: 0s; }
+    .icono-flotante.i2 { top: 16%; right: 11%; animation-delay: 1s; font-size: 2.6rem; }
+    .icono-flotante.i3 { bottom: 22%; left: 13%; animation-delay: 2s; }
+    .icono-flotante.i4 { bottom: 12%; right: 7%; animation-delay: 0.6s; font-size: 2.8rem; }
+    .icono-flotante.i5 { top: 44%; left: 2%; animation-delay: 1.6s; font-size: 1.7rem; }
+    .icono-flotante.i6 { top: 6%; left: 42%; animation-delay: 2.4s; font-size: 1.8rem; }
+    .icono-flotante.i7 { bottom: 8%; left: 40%; animation-delay: 0.9s; font-size: 1.6rem; }
+    .icono-flotante.i8 { top: 50%; right: 2%; animation-delay: 1.3s; font-size: 2rem; }
     @keyframes flotar-icono {
         0%, 100% { transform: translateY(0) rotate(0deg); }
         50% { transform: translateY(-14px) rotate(6deg); }
     }
     .portada-titulo {
-        font-size: 3.3rem;
-        line-height: 1.08;
+        font-size: 4.2rem;
+        line-height: 1.05;
         font-weight: 800;
         margin-bottom: 4px;
         background: linear-gradient(90deg, #F8FAFC 0%, #8FA1BC 60%, #67D2D0 100%);
+        background-size: 200% 100%;
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
+        animation: brillo 4s ease-in-out infinite;
         z-index: 1;
         position: relative;
     }
     .portada-tagline {
-        color: #9FB4CE;
-        font-size: 1.08rem;
-        max-width: 480px;
-        margin: 18px auto 6px auto;
+        color: #CBD5E1;
+        font-size: 1.2rem;
+        max-width: 560px;
+        margin: 20px auto 8px auto;
         z-index: 1;
         position: relative;
     }
     @media (max-width: 640px) {
-        .portada-titulo { font-size: 2.3rem; }
-        .icono-flotante { font-size: 1.5rem !important; }
+        .portada-titulo { font-size: 2.6rem; }
+        .portada-tagline { font-size: 1.05rem; }
+        .icono-flotante { font-size: 1.4rem !important; }
     }
 
     /* Streamlit no apila st.columns solo en pantallas angostas: sin esto,
@@ -302,12 +335,15 @@ if st.session_state.vista == "portada":
                 <span class="icono-flotante i3">💳</span>
                 <span class="icono-flotante i4">🏦</span>
                 <span class="icono-flotante i5">📊</span>
+                <span class="icono-flotante i6">💵</span>
+                <span class="icono-flotante i7">🪙</span>
+                <span class="icono-flotante i8">🧾</span>
             </div>
             <div class="portada-titulo">Financial<br/>Overview</div>
             <div class="hero-accent" style="margin-left:auto;margin-right:auto;"></div>
             <div class="portada-tagline">
-                Tu panel personal para entender, ordenar y proyectar tus finanzas —
-                gratis, sin cuentas y sin subir tus datos a ningún lado.
+                Convertí tus movimientos en decisiones: cargá un resumen y en segundos vas a
+                ver a dónde va cada peso, qué podés mejorar y cuánto te falta para tu próxima meta.
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -331,12 +367,12 @@ if st.session_state.vista == "inicio":
             <div class="hero-fondo"></div>
             <div class="hero-titulo">💰 Financial Overview</div>
             <div class="hero-accent"></div>
-            <div class="hero-subtitulo">Entendé a dónde va tu plata, en segundos. Subí tu resumen y obtené
-                gráficos, categorías y consejos automáticos al instante.</div>
+            <div class="hero-subtitulo">Tu copiloto financiero: subí un resumen y en segundos tenés
+                gráficos, categorías, proyecciones de ahorro y respuestas a tus preguntas.</div>
             <div class="badge-row">
-                <span class="badge-pill">🔒 100% local, no se guarda en ningún lado</span>
-                <span class="badge-pill">🤖 Sin IA de pago ni cuentas</span>
-                <span class="badge-pill">📱 Anda en el celu y en la compu</span>
+                <span class="badge-pill">📊 +10 gráficos y análisis</span>
+                <span class="badge-pill">🎯 Proyectá tus metas de ahorro</span>
+                <span class="badge-pill">💬 Preguntale a tus datos</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -499,6 +535,14 @@ if df_movimientos.empty:
 
 if filas_invalidas > 0:
     st.warning(f"Se descartaron {filas_invalidas} fila(s) porque no se pudo interpretar la fecha o el importe.")
+
+# Correcciones de categoría hechas a mano en la pestaña Movimientos: se
+# reaplican acá, ANTES de calcular KPIs/gráficos/resumen, para que todo el
+# dashboard se actualice al instante apenas se corrige algo — sin tener que
+# descargar el CSV corregido y volver a subirlo.
+if "correcciones_categoria" not in st.session_state:
+    st.session_state.correcciones_categoria = {}
+df_movimientos = aplicar_correcciones(df_movimientos, st.session_state.correcciones_categoria)
 
 st.markdown("---")
 
@@ -706,35 +750,102 @@ with tab_proyeccion:
             else:
                 st.success(f"¡Ya vas a un ritmo suficiente! Estás {abs(diferencia):,.0f} por arriba de lo necesario por mes.")
 
+    with st.container(border=True):
+        st.markdown("##### 📚 Dónde suele guardarse la plata que se ahorra")
+        st.caption(
+            "Información general para conocer las opciones más comunes — **no es una "
+            "recomendación personalizada** (no somos asesores financieros). Antes de decidir, "
+            "comparalo con tu situación y, si hace falta, consultá a un profesional matriculado."
+        )
+        col_opt1, col_opt2, col_opt3 = st.columns(3)
+        with col_opt1:
+            st.markdown("**🏦 Plazo fijo**")
+            st.caption(
+                "Depositás un monto por un plazo fijo (30 días o más) a cambio de un interés "
+                "pactado de antemano. Bajo riesgo, pero el dinero queda inmovilizado hasta el "
+                "vencimiento."
+            )
+        with col_opt2:
+            st.markdown("**📈 Fondo común de inversión**")
+            st.caption(
+                "Varias personas ponen su dinero en un fondo administrado por una sociedad "
+                "gerente, que invierte en distintos activos. Más liquidez que un plazo fijo, "
+                "pero el rendimiento no está garantizado."
+            )
+        with col_opt3:
+            st.markdown("**💵 Dólares u otra moneda**")
+            st.caption(
+                "Convertir parte del ahorro a otra moneda para cubrirse de la devaluación del "
+                "peso. No genera renta por sí solo, y tiene el riesgo de la cotización."
+            )
+
 with tab_movimientos:
-    st.caption("Movimientos del período seleccionado. Podés corregir la categoría de cualquiera.")
-    df_periodo = df_movimientos[df_movimientos["periodo"] == periodo_seleccionado].copy()
+    st.caption(
+        "Movimientos del período seleccionado. Corregí la categoría de cualquiera y se actualiza "
+        "al instante en todo el dashboard — no hace falta descargar ni volver a subir nada."
+    )
     categorias_existentes = sorted(
         set(df_movimientos["categoria"]) | set(REGLAS_CATEGORIAS.keys())
         | {"Ingresos", "Sin clasificar", "Movimiento interno"}
     )
 
-    with st.container(border=True):
-        editado = st.data_editor(
-            df_periodo[["fecha", "descripcion", "importe", "categoria"]],
-            column_config={
-                "categoria": st.column_config.SelectboxColumn("categoria", options=categorias_existentes),
-                "importe": st.column_config.NumberColumn("importe", format="$%.0f"),
-            },
-            disabled=["fecha", "descripcion", "importe"],
-            width="stretch",
-            hide_index=True,
-            key=f"editor_{periodo_seleccionado}",
-        )
+    filtro_categoria = st.selectbox(
+        "Filtrar por categoría", ["Todas"] + categorias_existentes, key="filtro_categoria_movimientos",
+    )
 
-        if not editado["categoria"].equals(df_periodo["categoria"].reset_index(drop=True)):
-            df_movimientos.loc[df_periodo.index, "categoria"] = editado["categoria"].values
-            st.success("Categorías actualizadas. Descargá el CSV corregido abajo para no perder el cambio.")
+    df_periodo = df_movimientos[df_movimientos["periodo"] == periodo_seleccionado].copy()
+    if filtro_categoria != "Todas":
+        df_periodo = df_periodo[df_periodo["categoria"] == filtro_categoria]
+    df_periodo = df_periodo.reset_index(drop=True)
+
+    with st.container(border=True):
+        if df_periodo.empty:
+            st.caption("No hay movimientos con ese filtro en este período.")
+        else:
+            editado = st.data_editor(
+                df_periodo[["fecha", "descripcion", "importe", "categoria"]],
+                column_config={
+                    "categoria": st.column_config.SelectboxColumn("categoria", options=categorias_existentes),
+                    "importe": st.column_config.NumberColumn("importe", format="$%.0f"),
+                },
+                disabled=["fecha", "descripcion", "importe"],
+                width="stretch",
+                hide_index=True,
+                key=f"editor_{periodo_seleccionado}_{filtro_categoria}",
+            )
+
+            cambios = editado["categoria"] != df_periodo["categoria"]
+            if cambios.any():
+                claves_cambiadas = df_periodo[cambios].apply(clave_movimiento, axis=1)
+                for clave, nueva_categoria in zip(claves_cambiadas, editado["categoria"][cambios]):
+                    st.session_state.correcciones_categoria[clave] = nueva_categoria
+                st.rerun()
 
         csv_actualizado = df_movimientos.drop(columns=["mes", "año", "periodo", "tipo"]).to_csv(index=False)
         st.download_button(
-            "⬇️ Descargar CSV con las categorías corregidas",
+            "⬇️ Descargar CSV con todas las categorías corregidas",
             data=csv_actualizado,
             file_name="movimientos_corregidos.csv",
             mime="text/csv",
         )
+
+    frecuentes = sin_clasificar_frecuentes(df_movimientos)
+    if not frecuentes.empty:
+        with st.container(border=True):
+            st.markdown("##### ⚠️ Sin clasificar, y se repiten")
+            st.caption(
+                "Estas descripciones aparecen varias veces sin categoría — clasificarlas una vez "
+                "ordena de golpe todas sus apariciones, en cualquier mes."
+            )
+            for _, fila in frecuentes.head(8).iterrows():
+                col_desc, col_cat, col_btn = st.columns([3, 2, 1])
+                col_desc.markdown(f"**{fila['descripcion']}**  \n{fila['cantidad']:.0f} veces · ${fila['total']:,.0f} en total")
+                nueva_cat = col_cat.selectbox(
+                    "Categoría", categorias_existentes, key=f"masiva_cat_{fila['descripcion']}",
+                    label_visibility="collapsed",
+                )
+                if col_btn.button("Aplicar", key=f"masiva_btn_{fila['descripcion']}"):
+                    coincidencias = df_movimientos[df_movimientos["descripcion"] == fila["descripcion"]]
+                    for clave in coincidencias.apply(clave_movimiento, axis=1):
+                        st.session_state.correcciones_categoria[clave] = nueva_cat
+                    st.rerun()

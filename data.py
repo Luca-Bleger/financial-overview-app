@@ -19,13 +19,18 @@ MESES_ES = {
 }
 
 REGLAS_CATEGORIAS = {
-    # Patrones de ingreso: se revisan primero porque son prefijos de
-    # descripción, no nombres de comercio, y conviene que ganen por sobre
+    # Patrones de ingreso/movimiento: se revisan primero porque son prefijos
+    # de descripción, no nombres de comercio, y conviene que ganen por sobre
     # cualquier coincidencia casual de palabra clave más abajo.
     "Sueldo": ["SUELDO", "HABERES", "AGUINALDO", "NOMINA"],
     "Rendimientos": ["RENDIMIENTOS"],
     "Devoluciones": ["DEVOLUCION DE PAGO", "DEVOLUCIÓN DE PAGO", "REEMBOLSO"],
     "Transferencias": ["TRANSFERENCIA ENVIADA", "TRANSFERENCIA RECIBIDA"],
+    # Pagos con QR: se separan del resto de compras porque agrupan comercios
+    # muy variados (kioscos, ferias, changarines) bajo un mismo medio de
+    # pago — conviene verlos aparte para detectar el gasto "efectivo digital"
+    # del día a día, en vez de que se mezclen en "Sin clasificar".
+    "Pagos con QR": ["PAGO QR", "COBRO QR", "COMPRA CON QR", " QR "],
     # Categorías de gasto
     "Alimentación": [
         "DISCO", "COTO", "PEDIDOSYA", "SUPERMERCADO", "CARREFOUR", "DIA ", "JUMBO",
@@ -331,6 +336,44 @@ def resumen_por_granularidad(df_movimientos, granularidad="mes"):
     resumen["Saldo"] = resumen["Ingreso"] - resumen["Gasto"]
     resumen.index.name = "clave"
     return resumen.sort_index()
+
+
+def clave_movimiento(fila):
+    """Identificador estable de un movimiento (fecha+descripción+importe),
+    para poder guardar una corrección manual de categoría en session_state y
+    reaplicarla en cada rerun, sin depender de la posición en el DataFrame."""
+    return f"{fila['fecha'].date()}|{fila['descripcion']}|{fila['importe']}"
+
+
+def aplicar_correcciones(df_movimientos, correcciones):
+    """Reaplica correcciones de categoría hechas a mano (dict clave -> nueva
+    categoría) sobre un df_movimientos recién reconstruido desde el archivo
+    original, para que persistan entre reruns sin tener que descargar y
+    volver a subir el CSV."""
+    if not correcciones:
+        return df_movimientos
+    claves = df_movimientos.apply(clave_movimiento, axis=1)
+    for clave, categoria in correcciones.items():
+        df_movimientos.loc[claves == clave, "categoria"] = categoria
+    return df_movimientos
+
+
+def sin_clasificar_frecuentes(df_movimientos, minimo=2):
+    """Agrupa los movimientos "Sin clasificar" por descripción exacta, para
+    detectar cuáles son recurrentes (el mismo comercio/concepto aparece
+    varias veces) — esos convienen clasificarse primero porque una sola
+    corrección masiva ordena de golpe todas sus apariciones."""
+    df = df_movimientos[df_movimientos["categoria"] == "Sin clasificar"]
+    if df.empty:
+        return pd.DataFrame(columns=["descripcion", "cantidad", "total"])
+
+    agrupado = (
+        df.groupby("descripcion")["importe"]
+        .agg(cantidad="count", total=lambda s: s.abs().sum())
+        .reset_index()
+        .sort_values(["cantidad", "total"], ascending=False)
+    )
+    return agrupado[agrupado["cantidad"] >= minimo]
 
 
 def proyectar_ahorro(resumen, monto_objetivo, meses_deseados=None):

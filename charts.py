@@ -42,7 +42,7 @@ LAYOUT_BASE = dict(
 
 LEYENDA_ABAJO = dict(
     orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5,
-    font=dict(color=TEXTO, size=12),
+    font=dict(color=TEXTO, size=13),
 )
 
 
@@ -96,12 +96,12 @@ def grafico_evolucion(resumen, granularidad="mes"):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=360,
+        height=420,
         margin=dict(l=10, r=10, t=20, b=70),
         hovermode="closest",
         legend=LEYENDA_ABAJO,
-        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=13)),
-        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), tickformat=".2s"),
+        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=14)),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=13), tickformat=".2s"),
     )
     return fig
 
@@ -134,8 +134,8 @@ def _grafico_evolucion_snapshot(resumen, granularidad="mes"):
             font=dict(color=TEXTO_SECUNDARIO, size=12), x=0.5, xanchor="center",
         ),
         showlegend=False,
-        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=13)),
-        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), tickformat=".2s"),
+        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=14)),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=13), tickformat=".2s"),
     )
     return fig
 
@@ -150,22 +150,22 @@ def grafico_donut(gastos_categoria):
     if categorias:
         fig.add_trace(go.Pie(
             labels=categorias, values=valores, hole=0.62,
-            sort=False, textinfo="percent", textfont=dict(color=BLANCO, size=12),
+            sort=False, textinfo="percent", textfont=dict(color=BLANCO, size=13),
             marker=dict(colors=COLORES_CATEGORIA[:len(categorias)], line=dict(color=PANEL, width=3)),
             domain=dict(x=[0.1, 0.9], y=[0.28, 1]),
             hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent:.1%}<extra></extra>",
         ))
         fig.add_annotation(
-            text=f"<b>${total:,.0f}</b><br><span style='font-size:11px;color:{TEXTO_SECUNDARIO}'>Total gastado</span>",
-            x=0.5, y=0.64, showarrow=False, font=dict(size=16, color=BLANCO),
+            text=f"<b>${total:,.0f}</b><br><span style='font-size:12px;color:{TEXTO_SECUNDARIO}'>Total gastado</span>",
+            x=0.5, y=0.64, showarrow=False, font=dict(size=19, color=BLANCO),
         )
     else:
         fig.add_annotation(text="Sin gastos registrados", x=0.5, y=0.5, showarrow=False,
-                            font=dict(size=13, color=TEXTO_SECUNDARIO))
+                            font=dict(size=14, color=TEXTO_SECUNDARIO))
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=460,
+        height=500,
         margin=dict(l=10, r=10, t=10, b=10),
         showlegend=True,
         legend=dict(orientation="v", yanchor="top", y=0.24, xanchor="center", x=0.5, font=dict(color=TEXTO, size=12)),
@@ -188,12 +188,12 @@ def grafico_categorias_tiempo(cat_mes):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=460,
+        height=500,
         margin=dict(l=10, r=10, t=20, b=120),
         barmode="stack",
         legend=LEYENDA_ABAJO,
-        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=13)),
-        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), tickformat=".2s"),
+        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=14)),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=13), tickformat=".2s"),
     )
     return fig
 
@@ -211,10 +211,10 @@ def grafico_tasa_ahorro(resumen):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=320,
+        height=360,
         margin=dict(l=10, r=10, t=20, b=40),
-        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=13)),
-        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), ticksuffix="%"),
+        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=14)),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=13), ticksuffix="%"),
     )
     return fig
 
@@ -235,12 +235,12 @@ def grafico_top_gastos(df_solo_gastos, periodo_seleccionado, top_n=8):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=max(340, 60 + len(top) * 42),
+        height=max(380, 60 + len(top) * 46),
         margin=dict(l=10, r=20, t=20, b=30),
-        xaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), tickformat=".2s"),
+        xaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=13), tickformat=".2s"),
         # automargin=True: sin esto, las descripciones del eje Y (texto, no
         # números) quedaban recortadas porque el margen izquierdo era fijo
         # y muy chico para hacerles lugar.
-        yaxis=dict(tickfont=dict(color=TEXTO, size=12), automargin=True),
+        yaxis=dict(tickfont=dict(color=TEXTO, size=13), automargin=True),
     )
     return fig
