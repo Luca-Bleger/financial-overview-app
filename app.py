@@ -29,10 +29,21 @@ st.markdown("""
 <style>
     /* Letra más grande en toda la app: al ser el tamaño base (rem), todo lo
        que ya está definido en rem (botones, métricas, títulos) crece con
-       esto también, además del texto que usa el tamaño por default de
-       Streamlit (párrafos, tablas, tabs, inputs). */
-    html { font-size: 18px; }
-    small { font-size: 0.95rem !important; }
+       esto también. Streamlit por default pone el texto de párrafo a
+       0.875rem (más chico que el root) — se sobreescribe puntualmente
+       abajo para que captions, textos de ayuda y etiquetas también se
+       vean grandes, no solo lo que ya estaba en rem. */
+    html { font-size: 20px; }
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] p,
+    [data-testid="stWidgetLabel"] p,
+    .stTabs [data-baseweb="tab"] p,
+    [data-testid="stChatMessageContent"] p {
+        font-size: 1.05rem !important;
+    }
+    small { font-size: 1rem !important; }
 
     .block-container { padding-top: 2rem; max-width: 1600px; animation: fadeSlideUp 0.5s ease-out; }
 
