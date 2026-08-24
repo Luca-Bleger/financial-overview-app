@@ -31,6 +31,12 @@ REGLAS_CATEGORIAS = {
     # pago — conviene verlos aparte para detectar el gasto "efectivo digital"
     # del día a día, en vez de que se mezclen en "Sin clasificar".
     "Pagos con QR": ["PAGO QR", "COBRO QR", "COMPRA CON QR", " QR "],
+    # ARCA (ex-AFIP): se separa de "Servicios" porque son pagos a un
+    # organismo público (impuestos, monotributo), no un servicio contratado.
+    "ARCA": ["PAGO DE SERVICIO ARCA", " ARCA", "ARCA ", "AFIP", "MONOTRIBUTO"],
+    # Va antes que "Créditos y deudas" porque esa usa la palabra genérica
+    # "CUOTA", que si no perdería contra "CUOTA SOCIAL" y la clasificaría mal.
+    "Cuota social": ["CUOTA SOCIAL", "CLUB SOCIAL", "ASOCIACION CIVIL", "ASOCIACIÓN CIVIL"],
     # Categorías de gasto
     "Alimentación": [
         "DISCO", "COTO", "PEDIDOSYA", "SUPERMERCADO", "CARREFOUR", "DIA ", "JUMBO",
@@ -40,12 +46,19 @@ REGLAS_CATEGORIAS = {
         "NETFLIX", "SPOTIFY", "HBO", "DISNEY", "YOUTUBE", "PRIME VIDEO", "CINE",
         "GOOGLE ONE", "OPERATORIA DE CINES", "OPENAI", "CHATGPT",
     ],
+    "Suscripciones": [
+        "SUSCRIPCION", "SUSCRIPCIÓN", "MEMBRESIA", "MEMBRESÍA", "ICLOUD",
+        "AMAZON PRIME", "ADOBE", "CANVA", "XBOX", "PLAYSTATION PLUS",
+    ],
     "Transporte": ["UBER", "CABIFY", "SUBE", "NAFTA", "YPF", "SHELL", "PEAJE", "ESTACIONAMIENTO"],
     "Salud": ["FARMACITY", "FARMACIA", "OSDE", "SWISS MEDICAL", "MEDIC"],
+    "Gym / Deportes": [
+        "GIMNASIO", "GYM ", "CROSSFIT", "PADEL", "MEGATLON", "SPORTCLUB", "CLUB DEPORTIVO",
+    ],
+    "Peluquería": ["PELUQUERIA", "PELUQUERÍA", "BARBERIA", "BARBERÍA", "ESTETICA", "ESTÉTICA"],
     "Ropa": ["ZARA", "H&M", "NIKE", "ADIDAS"],
     "Servicios": [
-        "EDENOR", "EDESUR", "METROGAS", "AYSA", "TELECOM", "PERSONAL", "MOVISTAR",
-        "CLARO", "PAGO DE SERVICIO ARCA", " ARCA",
+        "EDENOR", "EDESUR", "METROGAS", "AYSA", "TELECOM", "PERSONAL", "MOVISTAR", "CLARO",
     ],
     "Vivienda": ["ALQUILER", "EXPENSAS", "HIPOTECA"],
     "Créditos y deudas": ["CUOTA", "CREDITOS DE MERCADO PAGO", "CRÉDITOS DE MERCADO PAGO"],

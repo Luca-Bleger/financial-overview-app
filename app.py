@@ -12,8 +12,8 @@ from data import (
     sugerencias_de_mapeo,
 )
 from charts import (
-    grafico_categorias_tiempo, grafico_donut, grafico_evolucion,
-    grafico_tasa_ahorro, grafico_top_gastos,
+    grafico_categorias_tiempo, grafico_comparacion_meses, grafico_donut,
+    grafico_evolucion, grafico_tasa_ahorro, grafico_top_gastos,
 )
 from insights import generar_insights
 from preguntas import PREGUNTAS_SUGERIDAS, responder as responder_pregunta
@@ -605,6 +605,7 @@ tab_resumen, tab_categorias, tab_consejos, tab_preguntas, tab_proyeccion, tab_mo
 with tab_resumen:
     with st.container(border=True):
         st.markdown("##### 📈 Evolución financiera")
+        st.caption("Usa todos los meses que cargaste, sin importar el período elegido arriba.")
 
         # Con un solo mes cargado, agrupar por mes muestra un solo punto sin
         # sentido — por default se elige la granularidad más chica que sí
@@ -627,20 +628,38 @@ with tab_resumen:
 
     with st.container(border=True):
         st.markdown("##### 🍩 Gastos por categoría")
+        st.caption(f"Mes seleccionado: **{nombre_seleccionado}**.")
         gastos_cat_actual = gastos_por_categoria(df_solo_gastos, periodo_seleccionado)
         st.plotly_chart(grafico_donut(gastos_cat_actual), width="stretch")
 
     with st.container(border=True):
         st.markdown("##### 🔝 Mayores gastos individuales del mes")
+        st.caption(f"Mes seleccionado: **{nombre_seleccionado}**.")
         st.plotly_chart(grafico_top_gastos(df_solo_gastos, periodo_seleccionado), width="stretch")
+
+    with st.container(border=True):
+        st.markdown("##### 🆚 Comparar meses")
+        st.caption("Elegí qué meses poner uno al lado del otro.")
+        opciones_comparar = list(opciones_periodo.keys())
+        default_comparar = opciones_comparar[-2:] if len(opciones_comparar) >= 2 else opciones_comparar
+        meses_a_comparar = st.multiselect(
+            "Meses a comparar", opciones_comparar, default=default_comparar, key="meses_comparar",
+        )
+        if len(meses_a_comparar) < 2:
+            st.info("Elegí al menos 2 meses para comparar.")
+        else:
+            periodos_comparar = sorted(opciones_periodo[nombre] for nombre in meses_a_comparar)
+            st.plotly_chart(grafico_comparacion_meses(resumen.loc[periodos_comparar]), width="stretch")
 
 with tab_categorias:
     cat_mes = gastos_categoria_por_mes(df_solo_gastos)
     with st.container(border=True):
         st.markdown("##### 📊 Evolución de gastos por categoría")
+        st.caption("Todos los meses cargados.")
         st.plotly_chart(grafico_categorias_tiempo(cat_mes), width="stretch")
     with st.container(border=True):
         st.markdown("##### 💹 Tasa de ahorro por mes")
+        st.caption("Todos los meses cargados.")
         st.plotly_chart(grafico_tasa_ahorro(resumen), width="stretch")
 
 with tab_consejos:

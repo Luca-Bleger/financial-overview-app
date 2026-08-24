@@ -79,7 +79,17 @@ def grafico_evolucion(resumen, granularidad="mes"):
     if len(resumen) < 2:
         return _grafico_evolucion_snapshot(resumen, granularidad)
 
-    labels = _etiquetas_granularidad(resumen.index, granularidad)
+    # Con "día" o "semana" puede haber decenas de puntos: usar un eje de
+    # categorías (texto) obliga a Plotly a mostrar una etiqueta por cada
+    # uno, y quedan todas amontonadas/ilegibles. Pasándole fechas reales en
+    # vez de texto, Plotly arma un eje de tipo fecha que decide solo cada
+    # cuánto mostrar un cartel, e incluso permite arrastrar para hacer zoom
+    # sobre un rango de fechas.
+    es_denso = granularidad in ("dia", "semana")
+    if es_denso:
+        eje_x = [p.start_time for p in resumen.index]
+    else:
+        eje_x = _etiquetas_granularidad(resumen.index, granularidad)
 
     fig = go.Figure()
     for nombre, color, columna, relleno in [
@@ -88,9 +98,15 @@ def grafico_evolucion(resumen, granularidad="mes"):
         ("Saldo", SALDO_COLOR, "Saldo", "tozeroy"),
     ]:
         fig.add_trace(go.Scatter(
-            x=labels, y=resumen[columna], mode="lines+markers", name=nombre,
-            line=dict(color=color, width=2.5), marker=dict(size=8, color=color),
+            x=eje_x, y=resumen[columna], mode="lines+markers", name=nombre,
+            line=dict(color=color, width=2 if es_denso else 2.5),
+            marker=dict(size=5 if es_denso else 8, color=color),
             fill=relleno, fillcolor=_con_opacidad(color, 0.08) if relleno else None,
+            # Los ingresos suelen ser un pago grande y puntual (el sueldo)
+            # que aplasta la escala del resto de la línea cuando se mira
+            # día a día — se arranca oculto pero togglable con un clic en
+            # la leyenda, para que gastos/saldo se vean a una escala útil.
+            visible="legendonly" if (es_denso and nombre == "Ingresos") else True,
             hovertemplate=f"<b>{nombre}</b><br>%{{x}}<br><b>$%{{y:,.0f}}</b><extra></extra>",
         ))
 
@@ -100,7 +116,11 @@ def grafico_evolucion(resumen, granularidad="mes"):
         margin=dict(l=10, r=10, t=20, b=70),
         hovermode="closest",
         legend=LEYENDA_ABAJO,
-        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=14)),
+        xaxis=dict(
+            showgrid=es_denso, gridcolor="rgba(148,163,184,0.06)",
+            tickfont=dict(color=TEXTO, size=14),
+            tickformat="%d/%m" if es_denso else None,
+        ),
         yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=13), tickformat=".2s"),
     )
     return fig
@@ -148,10 +168,14 @@ def grafico_donut(gastos_categoria):
     fig = go.Figure()
 
     if categorias:
+        # Con más de 10 categorías en un mismo mes, se acaba la paleta fija:
+        # en vez de recortar (dejando slices sin color), se cicla desde el
+        # principio para que ninguna porción quede sin asignar.
+        colores_ciclados = [COLORES_CATEGORIA[i % len(COLORES_CATEGORIA)] for i in range(len(categorias))]
         fig.add_trace(go.Pie(
             labels=categorias, values=valores, hole=0.62,
             sort=False, textinfo="percent", textfont=dict(color=BLANCO, size=13),
-            marker=dict(colors=COLORES_CATEGORIA[:len(categorias)], line=dict(color=PANEL, width=3)),
+            marker=dict(colors=colores_ciclados, line=dict(color=PANEL, width=3)),
             domain=dict(x=[0.1, 0.9], y=[0.28, 1]),
             hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent:.1%}<extra></extra>",
         ))
@@ -215,6 +239,39 @@ def grafico_tasa_ahorro(resumen):
         margin=dict(l=10, r=10, t=20, b=40),
         xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=14)),
         yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=13), ticksuffix="%"),
+    )
+    return fig
+
+
+def grafico_comparacion_meses(resumen_subset):
+    """Compara Ingresos/Gastos/Saldo entre los meses elegidos, uno al lado
+    del otro — para responder "¿este mes vs aquel otro?" sin tener que leer
+    toda la evolución de punta a punta."""
+    labels = _etiquetas_periodo(resumen_subset.index)
+
+    fig = go.Figure()
+    for nombre, color, columna in [
+        ("Ingresos", INGRESOS_COLOR, "Ingreso"),
+        ("Gastos", GASTOS_COLOR, "Gasto"),
+        ("Saldo", SALDO_COLOR, "Saldo"),
+    ]:
+        valores = resumen_subset[columna]
+        fig.add_trace(go.Bar(
+            x=labels, y=valores, name=nombre, marker=dict(color=color),
+            text=[f"${v:,.0f}" for v in valores], textposition="outside",
+            textfont=dict(color=BLANCO, size=11),
+            hovertemplate=f"<b>{nombre}</b><br>%{{x}}<br><b>$%{{y:,.0f}}</b><extra></extra>",
+        ))
+    fig.add_hline(y=0, line_color=BORDE, line_width=1)
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        height=420,
+        margin=dict(l=10, r=10, t=30, b=70),
+        barmode="group",
+        legend=LEYENDA_ABAJO,
+        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=14)),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=13), tickformat=".2s"),
     )
     return fig
 
