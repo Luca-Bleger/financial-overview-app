@@ -7,6 +7,7 @@ no asumimos nombres de columna fijos: el usuario mapea sus columnas reales
 a los campos que necesitamos, y esta capa se encarga de normalizarlas.
 """
 
+import math
 import unicodedata
 
 import numpy as np
@@ -313,3 +314,48 @@ def gastos_categoria_por_mes(df_solo_gastos):
         .groupby(["categoria", "periodo"])["importe"].sum()
         .unstack(fill_value=0)
     )
+
+
+FREQ_POR_GRANULARIDAD = {"dia": "D", "semana": "W", "mes": "M", "año": "Y"}
+
+
+def resumen_por_granularidad(df_movimientos, granularidad="mes"):
+    """Igual que resumen_por_periodo, pero agrupando por día, semana, mes o
+    año en vez de siempre por mes — para el gráfico de evolución, que puede
+    querer mostrar más o menos detalle según cuántos datos haya cargados."""
+    freq = FREQ_POR_GRANULARIDAD[granularidad]
+    clave = df_movimientos["fecha"].dt.to_period(freq)
+    resumen = df_movimientos.assign(_clave=clave).groupby(["_clave", "tipo"])["importe"].sum().unstack()
+    resumen["Gasto"] = abs(resumen.get("Gasto", 0))
+    resumen["Ingreso"] = resumen.get("Ingreso", 0)
+    resumen["Saldo"] = resumen["Ingreso"] - resumen["Gasto"]
+    resumen.index.name = "clave"
+    return resumen.sort_index()
+
+
+def proyectar_ahorro(resumen, monto_objetivo, meses_deseados=None):
+    """Proyección simple de ahorro: a partir del saldo promedio de los meses
+    ya cargados, estima cuánto tardarías en juntar `monto_objetivo`, y si se
+    indica `meses_deseados`, cuánto necesitarías ahorrar por mes para
+    lograrlo en ese plazo. Cálculo directo, sin IA."""
+    promedio_ahorro = resumen["Saldo"].mean() if len(resumen) else 0
+
+    resultado = {
+        "promedio_ahorro": promedio_ahorro,
+        "meses_necesarios": None,
+        "fecha_estimada": None,
+        "ahorro_necesario_mensual": None,
+        "diferencia_mensual": None,
+    }
+
+    if promedio_ahorro > 0 and monto_objetivo > 0:
+        meses_necesarios = math.ceil(monto_objetivo / promedio_ahorro)
+        resultado["meses_necesarios"] = meses_necesarios
+        resultado["fecha_estimada"] = pd.Timestamp.now().normalize() + pd.DateOffset(months=meses_necesarios)
+
+    if meses_deseados:
+        ahorro_necesario = monto_objetivo / meses_deseados
+        resultado["ahorro_necesario_mensual"] = ahorro_necesario
+        resultado["diferencia_mensual"] = ahorro_necesario - promedio_ahorro
+
+    return resultado

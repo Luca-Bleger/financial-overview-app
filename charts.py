@@ -50,22 +50,36 @@ def _etiquetas_periodo(periodos):
     return [f"{MESES_ES[p.month][:3]} {p.year}" for p in periodos]
 
 
+NOMBRE_GRANULARIDAD = {"dia": "día", "semana": "semana", "mes": "mes", "año": "año"}
+
+
+def _etiquetas_granularidad(indices, granularidad="mes"):
+    if granularidad == "dia":
+        return [p.strftime("%d/%m") for p in indices]
+    if granularidad == "semana":
+        return [f"Sem {p.start_time.strftime('%d/%m')}" for p in indices]
+    if granularidad == "año":
+        return [str(p.year) for p in indices]
+    return _etiquetas_periodo(indices)
+
+
 def _con_opacidad(color_hex, alpha):
     color_hex = color_hex.lstrip("#")
     r, g, b = int(color_hex[0:2], 16), int(color_hex[2:4], 16), int(color_hex[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
 
 
-def grafico_evolucion(resumen):
-    # Una línea necesita al menos 2 puntos para dibujarse: con un solo mes de
-    # datos, "lines+markers" solo puede mostrar un punto suelto flotando (eso
-    # es lo que se veía). En ese caso no tiene sentido mostrar una "evolución"
-    # — se muestra en cambio una comparación en barras de ese único mes, con
-    # los montos como etiqueta, que sí es información útil.
+def grafico_evolucion(resumen, granularidad="mes"):
+    # Una línea necesita al menos 2 puntos para dibujarse: con un solo
+    # período de datos en la granularidad elegida, "lines+markers" solo
+    # puede mostrar un punto suelto flotando (eso es lo que se veía antes
+    # con un solo mes cargado). En ese caso no tiene sentido mostrar una
+    # "evolución" — se muestra en cambio una comparación en barras de ese
+    # único período, con los montos como etiqueta.
     if len(resumen) < 2:
-        return _grafico_evolucion_snapshot(resumen)
+        return _grafico_evolucion_snapshot(resumen, granularidad)
 
-    labels = _etiquetas_periodo(resumen.index)
+    labels = _etiquetas_granularidad(resumen.index, granularidad)
 
     fig = go.Figure()
     for nombre, color, columna, relleno in [
@@ -92,10 +106,12 @@ def grafico_evolucion(resumen):
     return fig
 
 
-def _grafico_evolucion_snapshot(resumen):
-    """Comparación en barras para cuando solo hay un mes de datos cargado."""
+def _grafico_evolucion_snapshot(resumen, granularidad="mes"):
+    """Comparación en barras para cuando solo hay un período de datos en la
+    granularidad elegida (por ejemplo, un solo mes cargado)."""
     fila = resumen.iloc[0]
-    etiqueta = _etiquetas_periodo(resumen.index)[0]
+    etiqueta = _etiquetas_granularidad(resumen.index, granularidad)[0]
+    nombre_gran = NOMBRE_GRANULARIDAD.get(granularidad, "período")
     nombres = ["Ingresos", "Gastos", "Saldo"]
     colores = [INGRESOS_COLOR, GASTOS_COLOR, SALDO_COLOR]
     valores = [fila["Ingreso"], fila["Gasto"], fila["Saldo"]]
@@ -114,7 +130,7 @@ def _grafico_evolucion_snapshot(resumen):
         height=320,
         margin=dict(l=10, r=10, t=44, b=30),
         title=dict(
-            text=f"Todavía hay un solo mes cargado ({etiqueta}) — subí más de un mes para ver la evolución en el tiempo",
+            text=f"Solo hay un(a) {nombre_gran} con datos ({etiqueta}) — probá otra granularidad o subí más datos",
             font=dict(color=TEXTO_SECUNDARIO, size=12), x=0.5, xanchor="center",
         ),
         showlegend=False,

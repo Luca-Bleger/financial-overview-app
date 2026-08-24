@@ -4,9 +4,10 @@ import pandas as pd
 import streamlit as st
 
 from data import (
-    MESES_ES, REGLAS_CATEGORIAS, calcular_variacion, construir_movimientos,
-    gastos_categoria_por_mes, gastos_por_categoria, leer_archivo_robusto,
-    mapeo_fijo_pdf_mercadopago, periodo_anterior_de, resumen_por_periodo,
+    FREQ_POR_GRANULARIDAD, MESES_ES, REGLAS_CATEGORIAS, calcular_variacion,
+    construir_movimientos, gastos_categoria_por_mes, gastos_por_categoria,
+    leer_archivo_robusto, mapeo_fijo_pdf_mercadopago, periodo_anterior_de,
+    proyectar_ahorro, resumen_por_granularidad, resumen_por_periodo,
     sugerencias_de_mapeo,
 )
 from charts import (
@@ -14,6 +15,7 @@ from charts import (
     grafico_tasa_ahorro, grafico_top_gastos,
 )
 from insights import generar_insights
+from preguntas import PREGUNTAS_SUGERIDAS, responder as responder_pregunta
 
 st.set_page_config(
     page_title="Financial Overview",
@@ -177,6 +179,90 @@ st.markdown("""
         font-weight: 500;
     }
 
+    /* Portada: pantalla de bienvenida previa a la pantalla de opciones,
+       con manchas de gradiente e íconos de finanzas flotando de fondo. */
+    .portada-wrap {
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        padding: 20px 12px;
+    }
+    .portada-fondo {
+        position: absolute;
+        inset: -60px;
+        z-index: -1;
+        pointer-events: none;
+    }
+    .portada-fondo::before, .portada-fondo::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(80px);
+        opacity: 0.32;
+        animation: flotar 8s ease-in-out infinite alternate;
+    }
+    .portada-fondo::before {
+        width: 340px; height: 340px;
+        background: #8B95F6;
+        top: 8%; left: 8%;
+    }
+    .portada-fondo::after {
+        width: 320px; height: 320px;
+        background: #67D2D0;
+        bottom: 4%; right: 8%;
+        animation-delay: 1.4s;
+    }
+    .portada-iconos {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+    }
+    .icono-flotante {
+        position: absolute;
+        font-size: 2rem;
+        opacity: 0.35;
+        animation: flotar-icono 6s ease-in-out infinite;
+    }
+    .icono-flotante.i1 { top: 12%; left: 10%; animation-delay: 0s; }
+    .icono-flotante.i2 { top: 18%; right: 12%; animation-delay: 1s; font-size: 2.4rem; }
+    .icono-flotante.i3 { bottom: 20%; left: 14%; animation-delay: 2s; }
+    .icono-flotante.i4 { bottom: 14%; right: 8%; animation-delay: 0.6s; font-size: 2.6rem; }
+    .icono-flotante.i5 { top: 46%; left: 3%; animation-delay: 1.6s; font-size: 1.6rem; }
+    @keyframes flotar-icono {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50% { transform: translateY(-14px) rotate(6deg); }
+    }
+    .portada-titulo {
+        font-size: 3.3rem;
+        line-height: 1.08;
+        font-weight: 800;
+        margin-bottom: 4px;
+        background: linear-gradient(90deg, #F8FAFC 0%, #8FA1BC 60%, #67D2D0 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        z-index: 1;
+        position: relative;
+    }
+    .portada-tagline {
+        color: #9FB4CE;
+        font-size: 1.08rem;
+        max-width: 480px;
+        margin: 18px auto 6px auto;
+        z-index: 1;
+        position: relative;
+    }
+    @media (max-width: 640px) {
+        .portada-titulo { font-size: 2.3rem; }
+        .icono-flotante { font-size: 1.5rem !important; }
+    }
+
     /* Streamlit no apila st.columns solo en pantallas angostas: sin esto,
        cada columna queda apretada a una fracción del ancho del celular
        (por ejemplo, el gráfico de Evolución financiera quedaba a la mitad
@@ -197,9 +283,42 @@ st.markdown("""
 
 
 if "vista" not in st.session_state:
-    st.session_state.vista = "inicio"
+    st.session_state.vista = "portada"
 if "usar_ejemplo" not in st.session_state:
     st.session_state.usar_ejemplo = False
+
+
+# =========================================================
+# PORTADA: pantalla de bienvenida, antes de mostrar las opciones
+# =========================================================
+
+if st.session_state.vista == "portada":
+    st.markdown("""
+        <div class="portada-wrap">
+            <div class="portada-fondo"></div>
+            <div class="portada-iconos">
+                <span class="icono-flotante i1">💰</span>
+                <span class="icono-flotante i2">📈</span>
+                <span class="icono-flotante i3">💳</span>
+                <span class="icono-flotante i4">🏦</span>
+                <span class="icono-flotante i5">📊</span>
+            </div>
+            <div class="portada-titulo">Financial<br/>Overview</div>
+            <div class="hero-accent" style="margin-left:auto;margin-right:auto;"></div>
+            <div class="portada-tagline">
+                Tu panel personal para entender, ordenar y proyectar tus finanzas —
+                gratis, sin cuentas y sin subir tus datos a ningún lado.
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    _, col_centro, _ = st.columns([1, 1.4, 1])
+    with col_centro:
+        if st.button("Comenzar →", width="stretch", type="primary", key="btn_portada"):
+            st.session_state.vista = "inicio"
+            st.rerun()
+
+    st.stop()
 
 
 # =========================================================
@@ -435,14 +554,32 @@ k4.metric("📈 Tasa de ahorro", f"{tasa_ahorro:.1f}%")
 # SECCIONES (apartados)
 # =========================================================
 
-tab_resumen, tab_categorias, tab_consejos, tab_movimientos = st.tabs(
-    ["📈 Resumen", "🏷️ Categorías", "🧠 Consejos", "📋 Movimientos"]
+tab_resumen, tab_categorias, tab_consejos, tab_preguntas, tab_proyeccion, tab_movimientos = st.tabs(
+    ["📈 Resumen", "🏷️ Categorías", "🧠 Consejos", "💬 Preguntas", "🎯 Proyección", "📋 Movimientos"]
 )
 
 with tab_resumen:
     with st.container(border=True):
         st.markdown("##### 📈 Evolución financiera")
-        st.plotly_chart(grafico_evolucion(resumen), width="stretch")
+
+        # Con un solo mes cargado, agrupar por mes muestra un solo punto sin
+        # sentido — por default se elige la granularidad más chica que sí
+        # tenga más de un período, para que el gráfico sea útil de entrada.
+        opciones_gran = {"Día": "dia", "Semana": "semana", "Mes": "mes", "Año": "año"}
+        indice_default = 2  # "Mes"
+        if len(periodos_disponibles) < 2:
+            for i, clave in enumerate(["dia", "semana", "mes", "año"]):
+                if df_movimientos["fecha"].dt.to_period(FREQ_POR_GRANULARIDAD[clave]).nunique() > 1:
+                    indice_default = i
+                    break
+
+        granularidad_label = st.radio(
+            "Ver evolución por:", list(opciones_gran.keys()),
+            index=indice_default, horizontal=True, key="granularidad_evolucion",
+        )
+        granularidad = opciones_gran[granularidad_label]
+        resumen_gran = resumen_por_granularidad(df_movimientos, granularidad)
+        st.plotly_chart(grafico_evolucion(resumen_gran, granularidad), width="stretch")
 
     with st.container(border=True):
         st.markdown("##### 🍩 Gastos por categoría")
@@ -472,6 +609,102 @@ with tab_consejos:
             st.warning(item["mensaje"])
         else:
             st.info(item["mensaje"])
+
+with tab_preguntas:
+    st.caption(
+        "Respuestas generadas al instante con tus propios datos, no es una IA real conectada "
+        "a internet — así que no tiene costo ni límite de uso."
+    )
+
+    contexto_preguntas = {
+        "df_movimientos": df_movimientos,
+        "df_solo_gastos": df_solo_gastos,
+        "resumen": resumen,
+        "periodo_seleccionado": periodo_seleccionado,
+        "gastos_actual": gastos_actual,
+        "gastos_cat": gastos_por_categoria(df_solo_gastos, periodo_seleccionado),
+    }
+
+    if "chat_preguntas" not in st.session_state:
+        st.session_state.chat_preguntas = []
+
+    st.markdown("###### Preguntas sugeridas")
+    cols_preguntas = st.columns(2)
+    for i, pregunta in enumerate(PREGUNTAS_SUGERIDAS):
+        if cols_preguntas[i % 2].button(pregunta, key=f"pregunta_{i}", width="stretch"):
+            respuesta = responder_pregunta(pregunta, contexto_preguntas)
+            st.session_state.chat_preguntas.append({"role": "user", "content": pregunta})
+            st.session_state.chat_preguntas.append({"role": "assistant", "content": respuesta})
+            st.rerun()
+
+    st.markdown("###### Conversación")
+    with st.container(border=True):
+        if not st.session_state.chat_preguntas:
+            st.caption("Elegí una pregunta de arriba o escribí la tuya abajo para empezar.")
+        for mensaje in st.session_state.chat_preguntas:
+            with st.chat_message(mensaje["role"], avatar="🧑" if mensaje["role"] == "user" else "🤖"):
+                st.markdown(mensaje["content"])
+
+    pregunta_libre = st.chat_input("Escribí tu pregunta sobre tus movimientos...")
+    if pregunta_libre:
+        respuesta = responder_pregunta(pregunta_libre, contexto_preguntas)
+        st.session_state.chat_preguntas.append({"role": "user", "content": pregunta_libre})
+        st.session_state.chat_preguntas.append({"role": "assistant", "content": respuesta})
+        st.rerun()
+
+with tab_proyeccion:
+    st.caption(
+        "Estimación directa a partir del ahorro promedio de los meses que ya cargaste — cálculo "
+        "simple, sin IA."
+    )
+
+    with st.container(border=True):
+        st.markdown("##### 🎯 ¿Cuánto necesito ahorrar para comprar algo?")
+
+        col_monto, col_plazo = st.columns(2)
+        with col_monto:
+            monto_objetivo = st.number_input(
+                "Monto que querés juntar ($)", min_value=0.0, step=10000.0, value=500000.0, format="%.0f",
+            )
+        with col_plazo:
+            meses_deseados = st.number_input(
+                "¿En cuántos meses te gustaría lograrlo? (opcional)", min_value=0, step=1, value=0,
+            )
+
+        resultado = proyectar_ahorro(resumen, monto_objetivo, meses_deseados or None)
+        promedio = resultado["promedio_ahorro"]
+
+        st.markdown("---")
+        st.metric("Ahorro promedio mensual (histórico)", f"${promedio:,.0f}")
+
+        if promedio <= 0:
+            st.warning(
+                "Con tu ritmo actual no estás ahorrando (el saldo promedio de tus meses cargados es "
+                "negativo o cero), así que a este paso no vas a alcanzar la meta. Necesitarías reducir "
+                "gastos o aumentar ingresos."
+            )
+        elif monto_objetivo > 0:
+            fecha = resultado["fecha_estimada"]
+            fecha_texto = f"{MESES_ES[fecha.month]} {fecha.year}"
+            st.success(
+                f"A tu ritmo actual, vas a juntar ${monto_objetivo:,.0f} en aproximadamente "
+                f"**{resultado['meses_necesarios']} mes(es)** (alrededor de {fecha_texto})."
+            )
+
+        if meses_deseados and monto_objetivo > 0:
+            necesario = resultado["ahorro_necesario_mensual"]
+            diferencia = resultado["diferencia_mensual"]
+            st.markdown(
+                f"Para lograrlo en **{meses_deseados} mes(es)**, necesitarías ahorrar "
+                f"**${necesario:,.0f} por mes**."
+            )
+            if diferencia > 0:
+                st.info(
+                    f"Eso es ${diferencia:,.0f} más de lo que venís ahorrando en promedio — "
+                    "tendrías que ajustar gastos o sumar ingresos."
+                )
+            else:
+                st.success(f"¡Ya vas a un ritmo suficiente! Estás {abs(diferencia):,.0f} por arriba de lo necesario por mes.")
 
 with tab_movimientos:
     st.caption("Movimientos del período seleccionado. Podés corregir la categoría de cualquiera.")
