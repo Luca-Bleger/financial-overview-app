@@ -420,7 +420,79 @@ if st.session_state.vista == "portada":
     _, col_centro, _ = st.columns([1, 1.8, 1])
     with col_centro:
         if st.button("Comenzar →", width="stretch", type="primary", key="btn_portada"):
-            st.session_state.vista = "inicio"
+            st.session_state.vista = "auth"
+            st.rerun()
+
+    st.stop()
+
+
+# =========================================================
+# LOGIN / REGISTRO: primero la cuenta, así lo que subas después ya se
+# puede guardar y acumular desde el arranque.
+# =========================================================
+
+if st.session_state.vista == "auth":
+    st.markdown("#### Iniciá sesión o creá tu cuenta")
+    st.caption(
+        "Cada mes que subas se suma a tu historial — así vas a poder ver la evolución completa "
+        "con el tiempo, no solo el último archivo."
+    )
+
+    tab_login, tab_registro = st.tabs(["Iniciar sesión", "Crear cuenta"])
+
+    with tab_login:
+        with st.form("form_login"):
+            email_login = st.text_input("Email")
+            pass_login = st.text_input("Contraseña", type="password")
+            enviado_login = st.form_submit_button("Iniciar sesión", type="primary")
+        if enviado_login:
+            try:
+                resp = db.iniciar_sesion(email_login, pass_login)
+                st.session_state.auth_user = {"id": resp.user.id, "email": resp.user.email}
+                st.session_state.vista = "inicio"
+                st.rerun()
+            except Exception as e:
+                mensaje = str(e)
+                if "Email not confirmed" in mensaje:
+                    st.error(
+                        "Todavía no confirmaste tu email — revisá tu casilla (y la carpeta de "
+                        "spam) y tocá el enlace de confirmación antes de iniciar sesión."
+                    )
+                elif "Invalid login credentials" in mensaje:
+                    st.error("Email o contraseña incorrectos.")
+                else:
+                    st.error(f"No pude iniciar sesión: {mensaje}")
+
+    with tab_registro:
+        with st.form("form_registro"):
+            email_registro = st.text_input("Email", key="email_registro")
+            pass_registro = st.text_input("Contraseña (mínimo 6 caracteres)", type="password", key="pass_registro")
+            enviado_registro = st.form_submit_button("Crear cuenta", type="primary")
+        if enviado_registro:
+            try:
+                resp = db.registrarse(email_registro, pass_registro)
+                if resp.session is not None:
+                    st.session_state.auth_user = {"id": resp.user.id, "email": resp.user.email}
+                    st.session_state.vista = "inicio"
+                    st.rerun()
+                else:
+                    st.success(
+                        "Cuenta creada — revisá tu email para confirmarla y después iniciá sesión "
+                        "en la pestaña de al lado."
+                    )
+            except Exception as e:
+                st.error(f"No pude crear la cuenta: {e}")
+
+    st.markdown("---")
+    col_atras, col_demo = st.columns(2)
+    with col_atras:
+        if st.button("← Volver", width="stretch"):
+            st.session_state.vista = "portada"
+            st.rerun()
+    with col_demo:
+        if st.button("Prefiero probar sin cuenta primero", width="stretch"):
+            st.session_state.vista = "cargar"
+            st.session_state.usar_ejemplo = True
             st.rerun()
 
     st.stop()
@@ -507,59 +579,13 @@ if st.session_state.usar_ejemplo:
     tipo_fuente = "tabla"
     hay_archivo_nuevo = True
 else:
-    # ---- Login / registro: hace falta cuenta para que los resúmenes que
-    # subas se acumulen en tu historial en vez de perderse al cerrar la
-    # pestaña. "Probar con datos de ejemplo" sigue sin necesitar cuenta. ----
+    # El login/registro ahora pasa antes, en la pantalla "auth" — llegar
+    # hasta acá sin sesión solo puede pasar por una navegación rara (por
+    # ejemplo, volver atrás en el navegador). En ese caso, se manda de
+    # vuelta a esa pantalla en vez de duplicar el formulario acá.
     if st.session_state.auth_user is None:
-        st.markdown("#### Iniciá sesión para guardar y acumular tus resúmenes")
-        st.caption(
-            "Cada mes que subas se suma a tu historial — así vas a poder ver la evolución "
-            "completa con el tiempo, no solo el último archivo."
-        )
-        tab_login, tab_registro = st.tabs(["Iniciar sesión", "Crear cuenta"])
-
-        with tab_login:
-            with st.form("form_login"):
-                email_login = st.text_input("Email")
-                pass_login = st.text_input("Contraseña", type="password")
-                enviado_login = st.form_submit_button("Iniciar sesión", type="primary")
-            if enviado_login:
-                try:
-                    resp = db.iniciar_sesion(email_login, pass_login)
-                    st.session_state.auth_user = {"id": resp.user.id, "email": resp.user.email}
-                    st.rerun()
-                except Exception as e:
-                    mensaje = str(e)
-                    if "Email not confirmed" in mensaje:
-                        st.error(
-                            "Todavía no confirmaste tu email — revisá tu casilla (y la carpeta de "
-                            "spam) y tocá el enlace de confirmación antes de iniciar sesión."
-                        )
-                    elif "Invalid login credentials" in mensaje:
-                        st.error("Email o contraseña incorrectos.")
-                    else:
-                        st.error(f"No pude iniciar sesión: {mensaje}")
-
-        with tab_registro:
-            with st.form("form_registro"):
-                email_registro = st.text_input("Email", key="email_registro")
-                pass_registro = st.text_input("Contraseña (mínimo 6 caracteres)", type="password", key="pass_registro")
-                enviado_registro = st.form_submit_button("Crear cuenta", type="primary")
-            if enviado_registro:
-                try:
-                    resp = db.registrarse(email_registro, pass_registro)
-                    if resp.session is not None:
-                        st.session_state.auth_user = {"id": resp.user.id, "email": resp.user.email}
-                        st.rerun()
-                    else:
-                        st.success(
-                            "Cuenta creada — revisá tu email para confirmarla y después iniciá "
-                            "sesión en la pestaña de al lado."
-                        )
-                except Exception as e:
-                    st.error(f"No pude crear la cuenta: {e}")
-
-        st.stop()
+        st.session_state.vista = "auth"
+        st.rerun()
 
     usuario_id = st.session_state.auth_user["id"]
     col_cuenta, col_salir = st.columns([4, 1])
