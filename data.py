@@ -290,14 +290,23 @@ def construir_movimientos(df_raw, mapeo, modo_importe, formato_numero, formato_f
         lambda fila: categorizar(fila["descripcion"], fila["importe"]), axis=1
     )
 
+    df = df.drop(columns=["fecha_original"])
+    df = finalizar_movimientos(df)
+
+    return df, filas_invalidas
+
+
+def finalizar_movimientos(df):
+    """Agrega las columnas derivadas (tipo/mes/año/periodo) y ordena por
+    fecha. Es el mismo paso final tanto para movimientos recién parseados
+    de un archivo como para movimientos recuperados de la base de datos
+    (ver db.py), así ambos caminos terminan con el mismo formato."""
+    df = df.copy()
     df["tipo"] = df.apply(lambda fila: determinar_tipo(fila["descripcion"], fila["importe"]), axis=1)
     df["mes"] = df["fecha"].dt.month
     df["año"] = df["fecha"].dt.year
     df["periodo"] = df["fecha"].dt.to_period("M")
-
-    df = df.drop(columns=["fecha_original"]).sort_values("fecha").reset_index(drop=True)
-
-    return df, filas_invalidas
+    return df.sort_values("fecha").reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------

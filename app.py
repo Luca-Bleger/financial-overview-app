@@ -17,6 +17,7 @@ from charts import (
 )
 from insights import generar_insights
 from preguntas import PREGUNTAS_SUGERIDAS, responder as responder_pregunta
+import db
 
 st.set_page_config(
     page_title="Financial Overview",
@@ -385,6 +386,8 @@ if "vista" not in st.session_state:
     st.session_state.vista = "portada"
 if "usar_ejemplo" not in st.session_state:
     st.session_state.usar_ejemplo = False
+if "auth_user" not in st.session_state:
+    st.session_state.auth_user = None
 
 
 # =========================================================
@@ -495,122 +498,210 @@ if st.button("← Volver al inicio"):
     st.session_state.usar_ejemplo = False
     st.rerun()
 
+usuario_id = None
+archivo = None
+
 if st.session_state.usar_ejemplo:
     st.info("📎 Estás viendo datos de ejemplo, no los tuyos. Tocá \"← Volver al inicio\" cuando quieras subir tu propio archivo.")
     df_raw = pd.read_csv(Path(__file__).parent / "movimientos_ejemplo_2.csv")
     tipo_fuente = "tabla"
+    hay_archivo_nuevo = True
 else:
+    # ---- Login / registro: hace falta cuenta para que los resúmenes que
+    # subas se acumulen en tu historial en vez de perderse al cerrar la
+    # pestaña. "Probar con datos de ejemplo" sigue sin necesitar cuenta. ----
+    if st.session_state.auth_user is None:
+        st.markdown("#### Iniciá sesión para guardar y acumular tus resúmenes")
+        st.caption(
+            "Cada mes que subas se suma a tu historial — así vas a poder ver la evolución "
+            "completa con el tiempo, no solo el último archivo."
+        )
+        tab_login, tab_registro = st.tabs(["Iniciar sesión", "Crear cuenta"])
+
+        with tab_login:
+            with st.form("form_login"):
+                email_login = st.text_input("Email")
+                pass_login = st.text_input("Contraseña", type="password")
+                enviado_login = st.form_submit_button("Iniciar sesión", type="primary")
+            if enviado_login:
+                try:
+                    resp = db.iniciar_sesion(email_login, pass_login)
+                    st.session_state.auth_user = {"id": resp.user.id, "email": resp.user.email}
+                    st.rerun()
+                except Exception as e:
+                    mensaje = str(e)
+                    if "Email not confirmed" in mensaje:
+                        st.error(
+                            "Todavía no confirmaste tu email — revisá tu casilla (y la carpeta de "
+                            "spam) y tocá el enlace de confirmación antes de iniciar sesión."
+                        )
+                    elif "Invalid login credentials" in mensaje:
+                        st.error("Email o contraseña incorrectos.")
+                    else:
+                        st.error(f"No pude iniciar sesión: {mensaje}")
+
+        with tab_registro:
+            with st.form("form_registro"):
+                email_registro = st.text_input("Email", key="email_registro")
+                pass_registro = st.text_input("Contraseña (mínimo 6 caracteres)", type="password", key="pass_registro")
+                enviado_registro = st.form_submit_button("Crear cuenta", type="primary")
+            if enviado_registro:
+                try:
+                    resp = db.registrarse(email_registro, pass_registro)
+                    if resp.session is not None:
+                        st.session_state.auth_user = {"id": resp.user.id, "email": resp.user.email}
+                        st.rerun()
+                    else:
+                        st.success(
+                            "Cuenta creada — revisá tu email para confirmarla y después iniciá "
+                            "sesión en la pestaña de al lado."
+                        )
+                except Exception as e:
+                    st.error(f"No pude crear la cuenta: {e}")
+
+        st.stop()
+
+    usuario_id = st.session_state.auth_user["id"]
+    col_cuenta, col_salir = st.columns([4, 1])
+    with col_cuenta:
+        st.caption(f"📧 Conectado como **{st.session_state.auth_user['email']}**.")
+    with col_salir:
+        if st.button("Cerrar sesión"):
+            db.cerrar_sesion()
+            st.session_state.auth_user = None
+            st.rerun()
+
     archivo = st.file_uploader(
-        "Subí tu resumen o extracto (CSV, Excel o PDF de Mercado Pago)",
+        "Subí un resumen nuevo para sumarlo a tu historial (CSV, Excel o PDF de Mercado Pago) "
+        "— opcional si ya tenés datos guardados",
         type=["csv", "xlsx", "xls", "pdf"],
         help="Funciona con resúmenes de distintos bancos, en CSV o Excel: en el siguiente paso "
              "vas a poder indicar qué columna es cuál. Si tu celular guardó el archivo como "
              ".xlsx, también anda. Los PDF de \"Resumen de cuenta\" de Mercado Pago se reconocen "
-             "automáticamente.",
+             "automáticamente. Los movimientos que ya tenías guardados no se duplican.",
     )
-    if archivo is None:
-        st.stop()
+    hay_archivo_nuevo = archivo is not None
+    if hay_archivo_nuevo:
+        try:
+            df_raw, tipo_fuente = leer_archivo_robusto(archivo)
+        except Exception as e:
+            st.error(f"No pude leer el archivo: {e}")
+            st.stop()
+
+
+# =========================================================
+# MAPEO DE COLUMNAS (los CSV de distintos bancos no vienen todos igual) —
+# solo corre si hay un archivo nuevo para procesar este turno.
+# =========================================================
+
+if hay_archivo_nuevo:
+    with st.expander("Vista previa del archivo", expanded=False):
+        st.dataframe(df_raw.head(10), width="stretch")
+
+    if tipo_fuente == "pdf_mercadopago":
+        st.success(
+            f"Reconocí un resumen de cuenta de Mercado Pago — extraje {len(df_raw)} movimientos "
+            "automáticamente, sin necesidad de mapear columnas."
+        )
+        mapeo = mapeo_fijo_pdf_mercadopago()
+        modo_importe = "unica"
+        formato_numero = "punto"
+        formato_fecha = "auto"
+    elif st.session_state.usar_ejemplo:
+        mapeo = {"fecha": "fecha", "descripcion": "descripcion", "categoria": None, "importe": "importe"}
+        modo_importe = "unica"
+        formato_numero = "punto"
+        formato_fecha = "auto"
+    else:
+        columnas = list(df_raw.columns)
+        sugerencias = sugerencias_de_mapeo(columnas)
+
+        st.markdown("#### Configurá las columnas de tu archivo")
+        st.caption("Cada banco exporta distinto — indicá acá qué columna corresponde a cada dato.")
+
+        col_a, col_b = st.columns(2)
+
+        with col_a:
+            col_fecha = st.selectbox("Columna de fecha", columnas, index=sugerencias["fecha"] or 0)
+            col_descripcion = st.selectbox("Columna de descripción", columnas, index=sugerencias["descripcion"] or 0)
+
+            tiene_categoria = st.checkbox("Mi archivo ya trae una columna de categoría", value=sugerencias["categoria"] is not None)
+            col_categoria = None
+            if tiene_categoria:
+                col_categoria = st.selectbox("Columna de categoría", columnas, index=sugerencias["categoria"] or 0)
+
+        with col_b:
+            modo_importe_label = st.radio(
+                "¿Cómo viene el importe en tu archivo?",
+                ["Una sola columna con signo (+ ingreso / - gasto)", "Columnas separadas de Débito y Crédito"],
+            )
+            modo_importe = "unica" if modo_importe_label.startswith("Una sola") else "separado"
+
+            if modo_importe == "unica":
+                col_importe = st.selectbox("Columna de importe", columnas, index=sugerencias["importe"] or 0)
+                col_debito = col_credito = None
+            else:
+                col_importe = None
+                col_debito = st.selectbox("Columna de Débito (gastos)", columnas, index=sugerencias["debito"] or 0)
+                col_credito = st.selectbox("Columna de Crédito (ingresos)", columnas, index=sugerencias["credito"] or 0)
+
+            formato_numero_label = st.radio("Formato de los números", ["1234.56 (punto decimal)", "1.234,56 (coma decimal)"])
+            formato_numero = "punto" if formato_numero_label.startswith("1234.56") else "coma"
+
+            formato_fecha_label = st.selectbox("Formato de fecha", ["Detectar automáticamente (día primero)", "Mes primero (MM/DD/AAAA)"])
+            formato_fecha = "mes_primero" if "Mes primero" in formato_fecha_label else "auto"
+
+        mapeo = {
+            "fecha": col_fecha,
+            "descripcion": col_descripcion,
+            "categoria": col_categoria,
+            "importe": col_importe,
+            "debito": col_debito,
+            "credito": col_credito,
+        }
 
     try:
-        df_raw, tipo_fuente = leer_archivo_robusto(archivo)
+        df_nuevo, filas_invalidas = construir_movimientos(
+            df_raw, mapeo, modo_importe, formato_numero, formato_fecha
+        )
     except Exception as e:
-        st.error(f"No pude leer el archivo: {e}")
+        st.error(f"No pude procesar el archivo con este mapeo: {e}")
         st.stop()
 
+    if df_nuevo.empty:
+        st.error("No quedó ningún movimiento válido con este mapeo de columnas. Revisá la configuración de arriba.")
+        st.stop()
 
-# =========================================================
-# MAPEO DE COLUMNAS (los CSV de distintos bancos no vienen todos igual)
-# =========================================================
+    if filas_invalidas > 0:
+        st.warning(f"Se descartaron {filas_invalidas} fila(s) porque no se pudo interpretar la fecha o el importe.")
 
-with st.expander("Vista previa del archivo", expanded=False):
-    st.dataframe(df_raw.head(10), width="stretch")
-
-if tipo_fuente == "pdf_mercadopago":
-    st.success(
-        f"Reconocí un resumen de cuenta de Mercado Pago — extraje {len(df_raw)} movimientos "
-        "automáticamente, sin necesidad de mapear columnas."
-    )
-    mapeo = mapeo_fijo_pdf_mercadopago()
-    modo_importe = "unica"
-    formato_numero = "punto"
-    formato_fecha = "auto"
-elif st.session_state.usar_ejemplo:
-    mapeo = {"fecha": "fecha", "descripcion": "descripcion", "categoria": None, "importe": "importe"}
-    modo_importe = "unica"
-    formato_numero = "punto"
-    formato_fecha = "auto"
-else:
-    columnas = list(df_raw.columns)
-    sugerencias = sugerencias_de_mapeo(columnas)
-
-    st.markdown("#### Configurá las columnas de tu archivo")
-    st.caption("Cada banco exporta distinto — indicá acá qué columna corresponde a cada dato.")
-
-    col_a, col_b = st.columns(2)
-
-    with col_a:
-        col_fecha = st.selectbox("Columna de fecha", columnas, index=sugerencias["fecha"] or 0)
-        col_descripcion = st.selectbox("Columna de descripción", columnas, index=sugerencias["descripcion"] or 0)
-
-        tiene_categoria = st.checkbox("Mi archivo ya trae una columna de categoría", value=sugerencias["categoria"] is not None)
-        col_categoria = None
-        if tiene_categoria:
-            col_categoria = st.selectbox("Columna de categoría", columnas, index=sugerencias["categoria"] or 0)
-
-    with col_b:
-        modo_importe_label = st.radio(
-            "¿Cómo viene el importe en tu archivo?",
-            ["Una sola columna con signo (+ ingreso / - gasto)", "Columnas separadas de Débito y Crédito"],
-        )
-        modo_importe = "unica" if modo_importe_label.startswith("Una sola") else "separado"
-
-        if modo_importe == "unica":
-            col_importe = st.selectbox("Columna de importe", columnas, index=sugerencias["importe"] or 0)
-            col_debito = col_credito = None
-        else:
-            col_importe = None
-            col_debito = st.selectbox("Columna de Débito (gastos)", columnas, index=sugerencias["debito"] or 0)
-            col_credito = st.selectbox("Columna de Crédito (ingresos)", columnas, index=sugerencias["credito"] or 0)
-
-        formato_numero_label = st.radio("Formato de los números", ["1234.56 (punto decimal)", "1.234,56 (coma decimal)"])
-        formato_numero = "punto" if formato_numero_label.startswith("1234.56") else "coma"
-
-        formato_fecha_label = st.selectbox("Formato de fecha", ["Detectar automáticamente (día primero)", "Mes primero (MM/DD/AAAA)"])
-        formato_fecha = "mes_primero" if "Mes primero" in formato_fecha_label else "auto"
-
-    mapeo = {
-        "fecha": col_fecha,
-        "descripcion": col_descripcion,
-        "categoria": col_categoria,
-        "importe": col_importe,
-        "debito": col_debito,
-        "credito": col_credito,
-    }
-
-try:
-    df_movimientos, filas_invalidas = construir_movimientos(
-        df_raw, mapeo, modo_importe, formato_numero, formato_fecha
-    )
-except Exception as e:
-    st.error(f"No pude procesar el archivo con este mapeo: {e}")
-    st.stop()
-
-if df_movimientos.empty:
-    st.error("No quedó ningún movimiento válido con este mapeo de columnas. Revisá la configuración de arriba.")
-    st.stop()
-
-if filas_invalidas > 0:
-    st.warning(f"Se descartaron {filas_invalidas} fila(s) porque no se pudo interpretar la fecha o el importe.")
-
-# Correcciones de categoría hechas a mano en la pestaña Movimientos: se
-# reaplican acá, ANTES de calcular KPIs/gráficos/resumen, para que todo el
-# dashboard se actualice al instante apenas se corrige algo — sin tener que
-# descargar el CSV corregido y volver a subirlo.
-if "correcciones_categoria" not in st.session_state:
-    st.session_state.correcciones_categoria = {}
-df_movimientos = aplicar_correcciones(df_movimientos, st.session_state.correcciones_categoria)
+    if usuario_id is not None:
+        cantidad = db.guardar_movimientos(usuario_id, df_nuevo, fuente=archivo.name if archivo else "ejemplo")
+        st.success(f"Se guardaron {cantidad} movimiento(s) en tu historial (los que ya tenías no se duplican).")
 
 st.markdown("---")
+
+
+# =========================================================
+# DATOS A USAR: historial acumulado desde la base (usuarios con cuenta) o
+# solo el archivo de ejemplo con correcciones de sesión (demo).
+# =========================================================
+
+if usuario_id is not None:
+    df_movimientos = db.cargar_movimientos(usuario_id)
+    if df_movimientos.empty:
+        st.info("Todavía no tenés movimientos guardados. Subí tu primer resumen más arriba para empezar.")
+        st.stop()
+else:
+    df_movimientos = df_nuevo
+    # Correcciones de categoría hechas a mano en la pestaña Movimientos: se
+    # reaplican acá, ANTES de calcular KPIs/gráficos/resumen, para que todo
+    # el dashboard se actualice al instante apenas se corrige algo. Solo
+    # aplica al modo demo — con cuenta, la corrección se guarda directo en
+    # la base (ver pestaña Movimientos).
+    if "correcciones_categoria" not in st.session_state:
+        st.session_state.correcciones_categoria = {}
+    df_movimientos = aplicar_correcciones(df_movimientos, st.session_state.correcciones_categoria)
 
 
 # =========================================================
@@ -902,12 +993,17 @@ with tab_movimientos:
 
             cambios = editado["categoria"] != df_periodo["categoria"]
             if cambios.any():
-                claves_cambiadas = df_periodo[cambios].apply(clave_movimiento, axis=1)
-                for clave, nueva_categoria in zip(claves_cambiadas, editado["categoria"][cambios]):
-                    st.session_state.correcciones_categoria[clave] = nueva_categoria
+                if usuario_id is not None:
+                    for id_mov, nueva_categoria in zip(df_periodo[cambios]["id"], editado["categoria"][cambios]):
+                        db.actualizar_categoria(usuario_id, id_mov, nueva_categoria)
+                else:
+                    claves_cambiadas = df_periodo[cambios].apply(clave_movimiento, axis=1)
+                    for clave, nueva_categoria in zip(claves_cambiadas, editado["categoria"][cambios]):
+                        st.session_state.correcciones_categoria[clave] = nueva_categoria
                 st.rerun()
 
-        csv_actualizado = df_movimientos.drop(columns=["mes", "año", "periodo", "tipo"]).to_csv(index=False)
+        columnas_export = [c for c in ["mes", "año", "periodo", "tipo", "id"] if c in df_movimientos.columns]
+        csv_actualizado = df_movimientos.drop(columns=columnas_export).to_csv(index=False)
         st.download_button(
             "⬇️ Descargar CSV con todas las categorías corregidas",
             data=csv_actualizado,
@@ -932,6 +1028,10 @@ with tab_movimientos:
                 )
                 if col_btn.button("Aplicar", key=f"masiva_btn_{fila['descripcion']}"):
                     coincidencias = df_movimientos[df_movimientos["descripcion"] == fila["descripcion"]]
-                    for clave in coincidencias.apply(clave_movimiento, axis=1):
-                        st.session_state.correcciones_categoria[clave] = nueva_cat
+                    if usuario_id is not None:
+                        for id_mov in coincidencias["id"]:
+                            db.actualizar_categoria(usuario_id, id_mov, nueva_cat)
+                    else:
+                        for clave in coincidencias.apply(clave_movimiento, axis=1):
+                            st.session_state.correcciones_categoria[clave] = nueva_cat
                     st.rerun()
