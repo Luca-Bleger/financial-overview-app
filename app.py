@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
@@ -30,58 +32,108 @@ st.markdown("""
         padding: 14px 16px;
     }
     div[data-testid="stMetricLabel"] { color: #8FA1BC; }
+
+    /* Streamlit no apila st.columns solo en pantallas angostas: sin esto,
+       cada columna queda apretada a una fracción del ancho del celular
+       (por ejemplo, el gráfico de Evolución financiera quedaba a la mitad
+       del ancho de la pantalla). Se fuerza que se apilen en una sola
+       columna de ancho completo por debajo de ~640px. */
+    @media (max-width: 640px) {
+        div[data-testid="stHorizontalBlock"] {
+            flex-direction: column !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
 
+if "vista" not in st.session_state:
+    st.session_state.vista = "inicio"
+if "usar_ejemplo" not in st.session_state:
+    st.session_state.usar_ejemplo = False
+
+
 # =========================================================
-# PORTADA / CARGA DE ARCHIVO
+# PANTALLA INICIAL: elegir qué querés hacer antes de subir nada
 # =========================================================
 
-if "df_movimientos" not in st.session_state:
-    st.session_state.df_movimientos = None
+if st.session_state.vista == "inicio":
+    st.markdown("## 💰 Financial Overview")
+    st.caption("Tu panel personal de análisis financiero")
+    st.markdown("#### ¿Qué querés hacer?")
 
-st.markdown("## 💰 Financial Overview")
-st.caption("Tu panel personal de análisis financiero")
-
-archivo = st.file_uploader(
-    "Subí tu resumen o extracto (CSV, Excel o PDF de Mercado Pago)",
-    type=["csv", "xlsx", "xls", "pdf"],
-    help="Funciona con resúmenes de distintos bancos, en CSV o Excel: en el siguiente paso "
-         "vas a poder indicar qué columna es cuál. Si tu celular guardó el archivo como "
-         ".xlsx, también anda. Los PDF de \"Resumen de cuenta\" de Mercado Pago se reconocen "
-         "automáticamente.",
-)
-
-if archivo is None:
-    st.session_state.df_movimientos = None
-    st.markdown("---")
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
+        if st.button("📤  Analizar mis movimientos", width="stretch", type="primary"):
+            st.session_state.vista = "cargar"
+            st.session_state.usar_ejemplo = False
+            st.rerun()
+        st.caption("Subí tu resumen bancario o de Mercado Pago (CSV, Excel o PDF) y generá tu dashboard.")
+    with col2:
+        if st.button("🧪  Probar con datos de ejemplo", width="stretch"):
+            st.session_state.vista = "cargar"
+            st.session_state.usar_ejemplo = True
+            st.rerun()
+        st.caption("Mirá cómo funciona la app con datos ficticios, sin subir ningún archivo tuyo.")
+
+    st.markdown("---")
+    c1, c2, c3 = st.columns(3)
+    with c1:
         st.markdown("#### 📊 Varios análisis")
         st.caption("Evolución financiera, gastos por categoría, tasa de ahorro y tus mayores gastos del mes.")
-    with col2:
+    with c2:
         st.markdown("#### 🧠 Consejos automáticos")
         st.caption("Detecta aumentos, categorías nuevas y meses de ahorro flojo, sin IA externa ni costos.")
-    with col3:
+    with c3:
         st.markdown("#### 🏷️ Clasificación de gastos")
         st.caption("Categoriza automáticamente por palabras clave, y corregís lo que haga falta a mano.")
-    st.info("Subí un archivo CSV para empezar. No hace falta que tenga un formato específico — "
-            "vos le indicás a la app qué columna es la fecha, la descripción y el importe.")
+
     st.stop()
+
+
+# =========================================================
+# CARGA DE ARCHIVO
+# =========================================================
+
+st.markdown("## 💰 Financial Overview")
+if st.button("← Volver al inicio"):
+    st.session_state.vista = "inicio"
+    st.session_state.usar_ejemplo = False
+    st.rerun()
+
+if st.session_state.usar_ejemplo:
+    st.info("📎 Estás viendo datos de ejemplo, no los tuyos. Tocá \"← Volver al inicio\" cuando quieras subir tu propio archivo.")
+    df_raw = pd.read_csv(Path(__file__).parent / "movimientos_ejemplo_2.csv")
+    tipo_fuente = "tabla"
+else:
+    archivo = st.file_uploader(
+        "Subí tu resumen o extracto (CSV, Excel o PDF de Mercado Pago)",
+        type=["csv", "xlsx", "xls", "pdf"],
+        help="Funciona con resúmenes de distintos bancos, en CSV o Excel: en el siguiente paso "
+             "vas a poder indicar qué columna es cuál. Si tu celular guardó el archivo como "
+             ".xlsx, también anda. Los PDF de \"Resumen de cuenta\" de Mercado Pago se reconocen "
+             "automáticamente.",
+    )
+    if archivo is None:
+        st.stop()
+
+    try:
+        df_raw, tipo_fuente = leer_archivo_robusto(archivo)
+    except Exception as e:
+        st.error(f"No pude leer el archivo: {e}")
+        st.stop()
 
 
 # =========================================================
 # MAPEO DE COLUMNAS (los CSV de distintos bancos no vienen todos igual)
 # =========================================================
 
-try:
-    df_raw, tipo_fuente = leer_archivo_robusto(archivo)
-except Exception as e:
-    st.error(f"No pude leer el archivo: {e}")
-    st.stop()
-
-with st.expander("Vista previa del archivo subido", expanded=False):
+with st.expander("Vista previa del archivo", expanded=False):
     st.dataframe(df_raw.head(10), width="stretch")
 
 if tipo_fuente == "pdf_mercadopago":
@@ -90,6 +142,11 @@ if tipo_fuente == "pdf_mercadopago":
         "automáticamente, sin necesidad de mapear columnas."
     )
     mapeo = mapeo_fijo_pdf_mercadopago()
+    modo_importe = "unica"
+    formato_numero = "punto"
+    formato_fecha = "auto"
+elif st.session_state.usar_ejemplo:
+    mapeo = {"fecha": "fecha", "descripcion": "descripcion", "categoria": None, "importe": "importe"}
     modo_importe = "unica"
     formato_numero = "punto"
     formato_fecha = "auto"
@@ -156,7 +213,6 @@ if df_movimientos.empty:
 if filas_invalidas > 0:
     st.warning(f"Se descartaron {filas_invalidas} fila(s) porque no se pudo interpretar la fecha o el importe.")
 
-st.session_state.df_movimientos = df_movimientos
 st.markdown("---")
 
 
@@ -216,14 +272,12 @@ tab_resumen, tab_categorias, tab_consejos, tab_movimientos = st.tabs(
 )
 
 with tab_resumen:
-    col_izq, col_der = st.columns(2)
-    with col_izq:
-        st.markdown("##### Evolución financiera")
-        st.plotly_chart(grafico_evolucion(resumen), width="stretch")
-    with col_der:
-        st.markdown("##### Gastos por categoría")
-        gastos_cat_actual = gastos_por_categoria(df_solo_gastos, periodo_seleccionado)
-        st.plotly_chart(grafico_donut(gastos_cat_actual), width="stretch")
+    st.markdown("##### Evolución financiera")
+    st.plotly_chart(grafico_evolucion(resumen), width="stretch")
+
+    st.markdown("##### Gastos por categoría")
+    gastos_cat_actual = gastos_por_categoria(df_solo_gastos, periodo_seleccionado)
+    st.plotly_chart(grafico_donut(gastos_cat_actual), width="stretch")
 
     st.markdown("##### Mayores gastos individuales del mes")
     st.plotly_chart(grafico_top_gastos(df_solo_gastos, periodo_seleccionado), width="stretch")
@@ -268,7 +322,6 @@ with tab_movimientos:
 
     if not editado["categoria"].equals(df_periodo["categoria"].reset_index(drop=True)):
         df_movimientos.loc[df_periodo.index, "categoria"] = editado["categoria"].values
-        st.session_state.df_movimientos = df_movimientos
         st.success("Categorías actualizadas. Descargá el CSV corregido abajo para no perder el cambio.")
 
     csv_actualizado = df_movimientos.drop(columns=["mes", "año", "periodo", "tipo"]).to_csv(index=False)

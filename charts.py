@@ -172,9 +172,12 @@ def grafico_top_gastos(df_solo_gastos, periodo_seleccionado, top_n=8):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=340,
-        margin=dict(l=10, r=10, t=20, b=30),
+        height=max(340, 60 + len(top) * 42),
+        margin=dict(l=10, r=20, t=20, b=30),
         xaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), tickformat=".2s"),
-        yaxis=dict(tickfont=dict(color=TEXTO, size=12)),
+        # automargin=True: sin esto, las descripciones del eje Y (texto, no
+        # números) quedaban recortadas porque el margen izquierdo era fijo
+        # y muy chico para hacerles lugar.
+        yaxis=dict(tickfont=dict(color=TEXTO, size=12), automargin=True),
     )
     return fig
