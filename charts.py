@@ -174,18 +174,24 @@ def grafico_donut(gastos_categoria):
         colores_ciclados = [COLORES_CATEGORIA[i % len(COLORES_CATEGORIA)] for i in range(len(categorias))]
         fig.add_trace(go.Pie(
             labels=categorias, values=valores, hole=0.62,
-            sort=False, textinfo="percent", textfont=dict(color=BLANCO, size=13),
+            sort=False,
+            # "outside" con línea guía separa las porciones chicas entre sí
+            # (con "inside" quedaban todos los números amontonados/pisándose
+            # cuando había varias porciones pequeñas juntas, como pasaba acá).
+            textinfo="percent", textposition="outside",
+            textfont=dict(color=BLANCO, size=15),
+            outsidetextfont=dict(color=BLANCO, size=15),
             marker=dict(colors=colores_ciclados, line=dict(color=PANEL, width=3)),
             # El donut va del lado izquierdo y la leyenda al costado derecho
             # (no debajo): así se leen las categorías al mismo tiempo que se
             # mira la porción correspondiente, en vez de tener que bajar la
             # vista a una lista aparte.
-            domain=dict(x=[0, 0.56], y=[0, 1]),
+            domain=dict(x=[0.05, 0.5], y=[0.08, 0.92]),
             hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent:.1%}<extra></extra>",
         ))
         fig.add_annotation(
             text=f"<b>${total:,.0f}</b><br><span style='font-size:12px;color:{TEXTO_SECUNDARIO}'>Total gastado</span>",
-            x=0.28, y=0.5, showarrow=False, font=dict(size=19, color=BLANCO),
+            x=0.275, y=0.5, showarrow=False, font=dict(size=19, color=BLANCO),
         )
     else:
         fig.add_annotation(text="Sin gastos registrados", x=0.5, y=0.5, showarrow=False,
@@ -193,10 +199,10 @@ def grafico_donut(gastos_categoria):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=420,
+        height=560,
         margin=dict(l=10, r=10, t=10, b=10),
         showlegend=True,
-        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=0.62, font=dict(color=TEXTO, size=13)),
+        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=0.68, font=dict(color=TEXTO, size=15)),
     )
     return fig
 

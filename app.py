@@ -34,6 +34,12 @@ st.markdown("""
        abajo para que captions, textos de ayuda y etiquetas también se
        vean grandes, no solo lo que ya estaba en rem. */
     html { font-size: 20px; }
+    /* Tipografía consistente en toda la app — sin esto, algunos elementos
+       (como las flechitas de variación en los KPIs) podían caer en una
+       fuente de respaldo distinta al resto y desentonar visualmente. */
+    html, body, [class*="css"], div[data-testid="stMetricDelta"] {
+        font-family: "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    }
     [data-testid="stMarkdownContainer"] p,
     [data-testid="stMarkdownContainer"] li,
     [data-testid="stCaptionContainer"],
