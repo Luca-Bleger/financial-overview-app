@@ -50,18 +50,33 @@ def _etiquetas_periodo(periodos):
     return [f"{MESES_ES[p.month][:3]} {p.year}" for p in periodos]
 
 
+def _con_opacidad(color_hex, alpha):
+    color_hex = color_hex.lstrip("#")
+    r, g, b = int(color_hex[0:2], 16), int(color_hex[2:4], 16), int(color_hex[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
 def grafico_evolucion(resumen):
+    # Una línea necesita al menos 2 puntos para dibujarse: con un solo mes de
+    # datos, "lines+markers" solo puede mostrar un punto suelto flotando (eso
+    # es lo que se veía). En ese caso no tiene sentido mostrar una "evolución"
+    # — se muestra en cambio una comparación en barras de ese único mes, con
+    # los montos como etiqueta, que sí es información útil.
+    if len(resumen) < 2:
+        return _grafico_evolucion_snapshot(resumen)
+
     labels = _etiquetas_periodo(resumen.index)
 
     fig = go.Figure()
-    for nombre, color, columna in [
-        ("Ingresos", INGRESOS_COLOR, "Ingreso"),
-        ("Gastos", GASTOS_COLOR, "Gasto"),
-        ("Saldo", SALDO_COLOR, "Saldo"),
+    for nombre, color, columna, relleno in [
+        ("Ingresos", INGRESOS_COLOR, "Ingreso", None),
+        ("Gastos", GASTOS_COLOR, "Gasto", None),
+        ("Saldo", SALDO_COLOR, "Saldo", "tozeroy"),
     ]:
         fig.add_trace(go.Scatter(
             x=labels, y=resumen[columna], mode="lines+markers", name=nombre,
             line=dict(color=color, width=2.5), marker=dict(size=8, color=color),
+            fill=relleno, fillcolor=_con_opacidad(color, 0.08) if relleno else None,
             hovertemplate=f"<b>{nombre}</b><br>%{{x}}<br><b>$%{{y:,.0f}}</b><extra></extra>",
         ))
 
@@ -71,6 +86,38 @@ def grafico_evolucion(resumen):
         margin=dict(l=10, r=10, t=20, b=70),
         hovermode="closest",
         legend=LEYENDA_ABAJO,
+        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=13)),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), tickformat=".2s"),
+    )
+    return fig
+
+
+def _grafico_evolucion_snapshot(resumen):
+    """Comparación en barras para cuando solo hay un mes de datos cargado."""
+    fila = resumen.iloc[0]
+    etiqueta = _etiquetas_periodo(resumen.index)[0]
+    nombres = ["Ingresos", "Gastos", "Saldo"]
+    colores = [INGRESOS_COLOR, GASTOS_COLOR, SALDO_COLOR]
+    valores = [fila["Ingreso"], fila["Gasto"], fila["Saldo"]]
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=nombres, y=valores, marker=dict(color=colores),
+        text=[f"${v:,.0f}" for v in valores], textposition="outside",
+        textfont=dict(color=BLANCO, size=13),
+        hovertemplate="<b>%{x}</b><br>$%{y:,.0f}<extra></extra>",
+    ))
+    fig.add_hline(y=0, line_color=BORDE, line_width=1)
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        height=320,
+        margin=dict(l=10, r=10, t=44, b=30),
+        title=dict(
+            text=f"Todavía hay un solo mes cargado ({etiqueta}) — subí más de un mes para ver la evolución en el tiempo",
+            font=dict(color=TEXTO_SECUNDARIO, size=12), x=0.5, xanchor="center",
+        ),
+        showlegend=False,
         xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=13)),
         yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), tickformat=".2s"),
     )

@@ -55,12 +55,29 @@ st.markdown("""
         background-color: #152033;
         border-color: #263752 !important;
         border-radius: 14px !important;
-        transition: border-color 0.25s ease, box-shadow 0.25s ease;
-        animation: fadeIn 0.6s ease-out;
+        transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+        animation: fadeIn 0.6s ease-out both;
     }
     div[data-testid="stVerticalBlockBorderWrapper"]:has(button):hover {
         border-color: #67D2D0 !important;
-        box-shadow: 0 8px 24px rgba(103, 210, 208, 0.12);
+        box-shadow: 0 10px 28px rgba(103, 210, 208, 0.14);
+        transform: translateY(-3px);
+    }
+
+    /* Tarjetas de la pantalla inicial: aparecen escalonadas (cada columna un
+       poco después que la anterior) y con un borde superior de color según
+       la posición, para que la fila no se vea toda igual/vacía. */
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(1) div[data-testid="stVerticalBlockBorderWrapper"] {
+        animation-delay: 0.05s;
+        border-top: 3px solid #8B95F6 !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderWrapper"] {
+        animation-delay: 0.15s;
+        border-top: 3px solid #67D2D0 !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(3) div[data-testid="stVerticalBlockBorderWrapper"] {
+        animation-delay: 0.25s;
+        border-top: 3px solid #FF8194 !important;
     }
 
     /* Botones: efecto de elevación suave al pasar el mouse/tocar */
@@ -72,8 +89,49 @@ st.markdown("""
         box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     }
 
+    /* Fondo decorativo de la pantalla inicial: dos manchas de gradiente
+       difuminadas que flotan suavemente, para que el hero no se vea vacío
+       (estilo landing de app de finanzas, sin depender de imágenes externas). */
+    .hero-wrap {
+        position: relative;
+        padding-top: 6px;
+    }
+    .hero-fondo {
+        position: absolute;
+        top: -60px;
+        left: -40px;
+        right: -40px;
+        height: 260px;
+        overflow: visible;
+        z-index: -1;
+        pointer-events: none;
+    }
+    .hero-fondo::before, .hero-fondo::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(60px);
+        opacity: 0.30;
+        animation: flotar 7s ease-in-out infinite alternate;
+    }
+    .hero-fondo::before {
+        width: 260px; height: 260px;
+        background: #8B95F6;
+        top: -40px; left: 0;
+    }
+    .hero-fondo::after {
+        width: 240px; height: 240px;
+        background: #67D2D0;
+        top: 10px; right: 10px;
+        animation-delay: 1.2s;
+    }
+    @keyframes flotar {
+        from { transform: translateY(0) scale(1); }
+        to { transform: translateY(18px) scale(1.1); }
+    }
+
     .hero-titulo {
-        font-size: 2.3rem;
+        font-size: 2.6rem;
         font-weight: 800;
         margin-bottom: 0;
         background: linear-gradient(90deg, #F8FAFC 0%, #8FA1BC 100%);
@@ -85,8 +143,38 @@ st.markdown("""
         height: 4px;
         width: 64px;
         border-radius: 4px;
-        margin: 10px 0 18px 0;
+        margin: 10px 0 16px 0;
         background: linear-gradient(90deg, #8B95F6, #67D2D0);
+        background-size: 200% 100%;
+        animation: brillo 3s ease-in-out infinite;
+    }
+    @keyframes brillo {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+    }
+    .hero-subtitulo {
+        color: #CBD5E1;
+        font-size: 1.05rem;
+        margin-bottom: 18px;
+    }
+
+    .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 30px;
+    }
+    .badge-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(103, 210, 208, 0.08);
+        border: 1px solid rgba(103, 210, 208, 0.28);
+        color: #9FB4CE;
+        padding: 5px 13px;
+        border-radius: 999px;
+        font-size: 12.5px;
+        font-weight: 500;
     }
 
     /* Streamlit no apila st.columns solo en pantallas angostas: sin esto,
@@ -119,15 +207,30 @@ if "usar_ejemplo" not in st.session_state:
 # =========================================================
 
 if st.session_state.vista == "inicio":
-    st.markdown('<div class="hero-titulo">💰 Financial Overview</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-accent"></div>', unsafe_allow_html=True)
-    st.caption("Tu panel personal de análisis financiero — sin subir nada, sin cuentas, sin IA de por medio.")
+    st.markdown("""
+        <div class="hero-wrap">
+            <div class="hero-fondo"></div>
+            <div class="hero-titulo">💰 Financial Overview</div>
+            <div class="hero-accent"></div>
+            <div class="hero-subtitulo">Entendé a dónde va tu plata, en segundos. Subí tu resumen y obtené
+                gráficos, categorías y consejos automáticos al instante.</div>
+            <div class="badge-row">
+                <span class="badge-pill">🔒 100% local, no se guarda en ningún lado</span>
+                <span class="badge-pill">🤖 Sin IA de pago ni cuentas</span>
+                <span class="badge-pill">📱 Anda en el celu y en la compu</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("#### ¿Qué querés hacer?")
 
     col1, col2 = st.columns(2)
     with col1:
         with st.container(border=True):
+            st.markdown(
+                '<span class="badge-pill" style="margin-bottom:8px;">⭐ Recomendado</span>',
+                unsafe_allow_html=True,
+            )
             st.markdown("##### 📤 Analizar mis movimientos")
             st.caption("Subí tu resumen bancario o de Mercado Pago (CSV, Excel o PDF) y generá tu dashboard.")
             if st.button("Empezar", width="stretch", type="primary", key="btn_analizar"):
