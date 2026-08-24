@@ -4,7 +4,8 @@ import streamlit as st
 from data import (
     MESES_ES, REGLAS_CATEGORIAS, calcular_variacion, construir_movimientos,
     gastos_categoria_por_mes, gastos_por_categoria, leer_archivo_robusto,
-    periodo_anterior_de, resumen_por_periodo, sugerencias_de_mapeo,
+    mapeo_fijo_pdf_mercadopago, periodo_anterior_de, resumen_por_periodo,
+    sugerencias_de_mapeo,
 )
 from charts import (
     grafico_categorias_tiempo, grafico_donut, grafico_evolucion,
@@ -44,11 +45,12 @@ st.markdown("## 💰 Financial Overview")
 st.caption("Tu panel personal de análisis financiero")
 
 archivo = st.file_uploader(
-    "Subí tu resumen o extracto (CSV o Excel)",
-    type=["csv", "xlsx", "xls"],
+    "Subí tu resumen o extracto (CSV, Excel o PDF de Mercado Pago)",
+    type=["csv", "xlsx", "xls", "pdf"],
     help="Funciona con resúmenes de distintos bancos, en CSV o Excel: en el siguiente paso "
          "vas a poder indicar qué columna es cuál. Si tu celular guardó el archivo como "
-         ".xlsx, también anda.",
+         ".xlsx, también anda. Los PDF de \"Resumen de cuenta\" de Mercado Pago se reconocen "
+         "automáticamente.",
 )
 
 if archivo is None:
@@ -74,7 +76,7 @@ if archivo is None:
 # =========================================================
 
 try:
-    df_raw = leer_archivo_robusto(archivo)
+    df_raw, tipo_fuente = leer_archivo_robusto(archivo)
 except Exception as e:
     st.error(f"No pude leer el archivo: {e}")
     st.stop()
@@ -82,52 +84,62 @@ except Exception as e:
 with st.expander("Vista previa del archivo subido", expanded=False):
     st.dataframe(df_raw.head(10), width="stretch")
 
-columnas = list(df_raw.columns)
-sugerencias = sugerencias_de_mapeo(columnas)
-
-st.markdown("#### Configurá las columnas de tu archivo")
-st.caption("Cada banco exporta distinto — indicá acá qué columna corresponde a cada dato.")
-
-col_a, col_b = st.columns(2)
-
-with col_a:
-    col_fecha = st.selectbox("Columna de fecha", columnas, index=sugerencias["fecha"] or 0)
-    col_descripcion = st.selectbox("Columna de descripción", columnas, index=sugerencias["descripcion"] or 0)
-
-    tiene_categoria = st.checkbox("Mi archivo ya trae una columna de categoría", value=sugerencias["categoria"] is not None)
-    col_categoria = None
-    if tiene_categoria:
-        col_categoria = st.selectbox("Columna de categoría", columnas, index=sugerencias["categoria"] or 0)
-
-with col_b:
-    modo_importe_label = st.radio(
-        "¿Cómo viene el importe en tu archivo?",
-        ["Una sola columna con signo (+ ingreso / - gasto)", "Columnas separadas de Débito y Crédito"],
+if tipo_fuente == "pdf_mercadopago":
+    st.success(
+        f"Reconocí un resumen de cuenta de Mercado Pago — extraje {len(df_raw)} movimientos "
+        "automáticamente, sin necesidad de mapear columnas."
     )
-    modo_importe = "unica" if modo_importe_label.startswith("Una sola") else "separado"
+    mapeo = mapeo_fijo_pdf_mercadopago()
+    modo_importe = "unica"
+    formato_numero = "punto"
+    formato_fecha = "auto"
+else:
+    columnas = list(df_raw.columns)
+    sugerencias = sugerencias_de_mapeo(columnas)
 
-    if modo_importe == "unica":
-        col_importe = st.selectbox("Columna de importe", columnas, index=sugerencias["importe"] or 0)
-        col_debito = col_credito = None
-    else:
-        col_importe = None
-        col_debito = st.selectbox("Columna de Débito (gastos)", columnas, index=sugerencias["debito"] or 0)
-        col_credito = st.selectbox("Columna de Crédito (ingresos)", columnas, index=sugerencias["credito"] or 0)
+    st.markdown("#### Configurá las columnas de tu archivo")
+    st.caption("Cada banco exporta distinto — indicá acá qué columna corresponde a cada dato.")
 
-    formato_numero_label = st.radio("Formato de los números", ["1234.56 (punto decimal)", "1.234,56 (coma decimal)"])
-    formato_numero = "punto" if formato_numero_label.startswith("1234.56") else "coma"
+    col_a, col_b = st.columns(2)
 
-    formato_fecha_label = st.selectbox("Formato de fecha", ["Detectar automáticamente (día primero)", "Mes primero (MM/DD/AAAA)"])
-    formato_fecha = "mes_primero" if "Mes primero" in formato_fecha_label else "auto"
+    with col_a:
+        col_fecha = st.selectbox("Columna de fecha", columnas, index=sugerencias["fecha"] or 0)
+        col_descripcion = st.selectbox("Columna de descripción", columnas, index=sugerencias["descripcion"] or 0)
 
-mapeo = {
-    "fecha": col_fecha,
-    "descripcion": col_descripcion,
-    "categoria": col_categoria,
-    "importe": col_importe,
-    "debito": col_debito,
-    "credito": col_credito,
-}
+        tiene_categoria = st.checkbox("Mi archivo ya trae una columna de categoría", value=sugerencias["categoria"] is not None)
+        col_categoria = None
+        if tiene_categoria:
+            col_categoria = st.selectbox("Columna de categoría", columnas, index=sugerencias["categoria"] or 0)
+
+    with col_b:
+        modo_importe_label = st.radio(
+            "¿Cómo viene el importe en tu archivo?",
+            ["Una sola columna con signo (+ ingreso / - gasto)", "Columnas separadas de Débito y Crédito"],
+        )
+        modo_importe = "unica" if modo_importe_label.startswith("Una sola") else "separado"
+
+        if modo_importe == "unica":
+            col_importe = st.selectbox("Columna de importe", columnas, index=sugerencias["importe"] or 0)
+            col_debito = col_credito = None
+        else:
+            col_importe = None
+            col_debito = st.selectbox("Columna de Débito (gastos)", columnas, index=sugerencias["debito"] or 0)
+            col_credito = st.selectbox("Columna de Crédito (ingresos)", columnas, index=sugerencias["credito"] or 0)
+
+        formato_numero_label = st.radio("Formato de los números", ["1234.56 (punto decimal)", "1.234,56 (coma decimal)"])
+        formato_numero = "punto" if formato_numero_label.startswith("1234.56") else "coma"
+
+        formato_fecha_label = st.selectbox("Formato de fecha", ["Detectar automáticamente (día primero)", "Mes primero (MM/DD/AAAA)"])
+        formato_fecha = "mes_primero" if "Mes primero" in formato_fecha_label else "auto"
+
+    mapeo = {
+        "fecha": col_fecha,
+        "descripcion": col_descripcion,
+        "categoria": col_categoria,
+        "importe": col_importe,
+        "debito": col_debito,
+        "credito": col_credito,
+    }
 
 try:
     df_movimientos, filas_invalidas = construir_movimientos(
@@ -237,7 +249,10 @@ with tab_consejos:
 with tab_movimientos:
     st.caption("Movimientos del período seleccionado. Podés corregir la categoría de cualquiera.")
     df_periodo = df_movimientos[df_movimientos["periodo"] == periodo_seleccionado].copy()
-    categorias_existentes = sorted(set(df_movimientos["categoria"]) | set(REGLAS_CATEGORIAS.keys()) | {"Ingresos", "Sin clasificar"})
+    categorias_existentes = sorted(
+        set(df_movimientos["categoria"]) | set(REGLAS_CATEGORIAS.keys())
+        | {"Ingresos", "Sin clasificar", "Movimiento interno"}
+    )
 
     editado = st.data_editor(
         df_periodo[["fecha", "descripcion", "importe", "categoria"]],

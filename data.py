@@ -18,27 +18,69 @@ MESES_ES = {
 }
 
 REGLAS_CATEGORIAS = {
-    "Alimentación": ["DISCO", "COTO", "PEDIDOSYA", "SUPERMERCADO", "CARREFOUR", "DIA ", "JUMBO", "RAPPI"],
-    "Entretenimiento": ["NETFLIX", "SPOTIFY", "HBO", "DISNEY", "YOUTUBE", "PRIME VIDEO", "CINE"],
+    # Patrones de ingreso: se revisan primero porque son prefijos de
+    # descripción, no nombres de comercio, y conviene que ganen por sobre
+    # cualquier coincidencia casual de palabra clave más abajo.
+    "Sueldo": ["SUELDO", "HABERES", "AGUINALDO", "NOMINA"],
+    "Rendimientos": ["RENDIMIENTOS"],
+    "Devoluciones": ["DEVOLUCION DE PAGO", "DEVOLUCIÓN DE PAGO", "REEMBOLSO"],
+    "Transferencias": ["TRANSFERENCIA ENVIADA", "TRANSFERENCIA RECIBIDA"],
+    # Categorías de gasto
+    "Alimentación": [
+        "DISCO", "COTO", "PEDIDOSYA", "SUPERMERCADO", "CARREFOUR", "DIA ", "JUMBO",
+        "RAPPI", "ARCOS DORADOS", "BUENOS DIAS SUPERMERCADOS", "ALMACEN",
+    ],
+    "Entretenimiento": [
+        "NETFLIX", "SPOTIFY", "HBO", "DISNEY", "YOUTUBE", "PRIME VIDEO", "CINE",
+        "GOOGLE ONE", "OPERATORIA DE CINES", "OPENAI", "CHATGPT",
+    ],
     "Transporte": ["UBER", "CABIFY", "SUBE", "NAFTA", "YPF", "SHELL", "PEAJE", "ESTACIONAMIENTO"],
     "Salud": ["FARMACITY", "FARMACIA", "OSDE", "SWISS MEDICAL", "MEDIC"],
     "Ropa": ["ZARA", "H&M", "NIKE", "ADIDAS"],
-    "Servicios": ["EDENOR", "EDESUR", "METROGAS", "AYSA", "TELECOM", "PERSONAL", "MOVISTAR", "CLARO"],
+    "Servicios": [
+        "EDENOR", "EDESUR", "METROGAS", "AYSA", "TELECOM", "PERSONAL", "MOVISTAR",
+        "CLARO", "PAGO DE SERVICIO ARCA", " ARCA",
+    ],
     "Vivienda": ["ALQUILER", "EXPENSAS", "HIPOTECA"],
+    "Créditos y deudas": ["CUOTA", "CREDITOS DE MERCADO PAGO", "CRÉDITOS DE MERCADO PAGO"],
 }
+
+# Movimientos que no son ingresos ni gastos reales: mover plata entre la
+# cuenta y el "fondo" de Ahorro dentro de la misma billetera. Si se cuentan
+# como ingreso/gasto, inflan artificialmente el dashboard (aparecen decenas
+# de veces por mes). Se identifican y se excluyen del cálculo financiero,
+# aunque siguen visibles en la tabla de movimientos para que quede claro
+# a dónde fue esa plata.
+PATRONES_MOVIMIENTO_INTERNO = [
+    "DINERO RETIRADO AHORRO",
+    "DINERO RESERVADO AHORRO",
+    "DINERO RETIRADO DE AHORRO",
+    "DINERO RESERVADO DE AHORRO",
+]
+
+
+def es_movimiento_interno(descripcion):
+    d = str(descripcion).upper()
+    return any(p in d for p in PATRONES_MOVIMIENTO_INTERNO)
 
 
 def categorizar(descripcion, importe):
-    if importe > 0:
-        return "Ingresos"
+    if es_movimiento_interno(descripcion):
+        return "Movimiento interno"
 
-    descripcion = str(descripcion).upper()
+    descripcion_norm = str(descripcion).upper()
 
     for categoria, palabras_clave in REGLAS_CATEGORIAS.items():
-        if any(palabra in descripcion for palabra in palabras_clave):
+        if any(palabra in descripcion_norm for palabra in palabras_clave):
             return categoria
 
-    return "Sin clasificar"
+    return "Ingresos" if importe > 0 else "Sin clasificar"
+
+
+def determinar_tipo(descripcion, importe):
+    if es_movimiento_interno(descripcion):
+        return "Interno"
+    return "Ingreso" if importe > 0 else "Gasto"
 
 
 def calcular_variacion(actual, anterior):
@@ -52,20 +94,32 @@ def calcular_variacion(actual, anterior):
 # ---------------------------------------------------------------------
 
 def leer_archivo_robusto(archivo):
-    """Lee el archivo subido, sea CSV o Excel (.xlsx/.xls).
+    """Lee el archivo subido: CSV, Excel (.xlsx/.xls) o PDF de Mercado Pago.
 
     Es común que un CSV termine convertido a Excel sin querer (por ejemplo,
     si se abrió con Google Sheets en el celular y se volvió a guardar), así
-    que esta función detecta el tipo real de archivo en vez de asumir CSV
-    por la extensión.
+    que esta función detecta el tipo real de archivo en vez de asumir por
+    la extensión.
+
+    Devuelve (df, tipo_fuente). tipo_fuente es "pdf_mercadopago" cuando ya
+    se reconoció y extrajo la estructura completa (fecha/descripcion/
+    importe) sin necesidad de que el usuario mapee columnas, o "tabla" para
+    CSV/Excel genéricos que sí necesitan el paso de mapeo.
     """
 
     nombre = getattr(archivo, "name", "") or ""
-    es_excel_por_nombre = nombre.lower().endswith((".xlsx", ".xls"))
 
     archivo.seek(0)
-    firma = archivo.read(4)
+    firma = archivo.read(5)
     archivo.seek(0)
+
+    if nombre.lower().endswith(".pdf") or firma[:4] == b"%PDF":
+        from pdf_mercadopago import extraer_movimientos_pdf
+
+        df = extraer_movimientos_pdf(archivo)
+        return df, "pdf_mercadopago"
+
+    es_excel_por_nombre = nombre.lower().endswith((".xlsx", ".xls"))
     # Los .xlsx son en realidad un .zip (firma "PK\x03\x04"); los .xls viejos
     # (formato binario OLE) arrancan con "\xD0\xCF\x11\xE0".
     es_excel_por_contenido = firma[:2] == b"PK" or firma[:4] == b"\xd0\xcf\x11\xe0"
@@ -73,13 +127,19 @@ def leer_archivo_robusto(archivo):
     if es_excel_por_nombre or es_excel_por_contenido:
         try:
             archivo.seek(0)
-            return pd.read_excel(archivo)
+            return pd.read_excel(archivo), "tabla"
         except Exception as e:
             raise ValueError(
                 f"El archivo parece ser Excel pero no pude leerlo. Detalle: {e}"
             )
 
-    return _leer_csv_robusto(archivo)
+    return _leer_csv_robusto(archivo), "tabla"
+
+
+def mapeo_fijo_pdf_mercadopago():
+    """El PDF de Mercado Pago ya se parsea con columnas fecha/descripcion/
+    importe conocidas: no hace falta que el usuario mapee nada."""
+    return {"fecha": "fecha", "descripcion": "descripcion", "categoria": None, "importe": "importe"}
 
 
 def _leer_csv_robusto(archivo):
@@ -211,7 +271,7 @@ def construir_movimientos(df_raw, mapeo, modo_importe, formato_numero, formato_f
         lambda fila: categorizar(fila["descripcion"], fila["importe"]), axis=1
     )
 
-    df["tipo"] = df["importe"].apply(lambda x: "Ingreso" if x > 0 else "Gasto")
+    df["tipo"] = df.apply(lambda fila: determinar_tipo(fila["descripcion"], fila["importe"]), axis=1)
     df["mes"] = df["fecha"].dt.month
     df["año"] = df["fecha"].dt.year
     df["periodo"] = df["fecha"].dt.to_period("M")
