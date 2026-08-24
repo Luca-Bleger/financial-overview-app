@@ -3,7 +3,7 @@ import streamlit as st
 
 from data import (
     MESES_ES, REGLAS_CATEGORIAS, calcular_variacion, construir_movimientos,
-    gastos_categoria_por_mes, gastos_por_categoria, leer_csv_robusto,
+    gastos_categoria_por_mes, gastos_por_categoria, leer_archivo_robusto,
     periodo_anterior_de, resumen_por_periodo, sugerencias_de_mapeo,
 )
 from charts import (
@@ -44,10 +44,11 @@ st.markdown("## 💰 Financial Overview")
 st.caption("Tu panel personal de análisis financiero")
 
 archivo = st.file_uploader(
-    "Subí tu resumen o extracto (CSV)",
-    type="csv",
-    help="Funciona con resúmenes de distintos bancos: en el siguiente paso vas a poder "
-         "indicar qué columna es cuál.",
+    "Subí tu resumen o extracto (CSV o Excel)",
+    type=["csv", "xlsx", "xls"],
+    help="Funciona con resúmenes de distintos bancos, en CSV o Excel: en el siguiente paso "
+         "vas a poder indicar qué columna es cuál. Si tu celular guardó el archivo como "
+         ".xlsx, también anda.",
 )
 
 if archivo is None:
@@ -73,7 +74,7 @@ if archivo is None:
 # =========================================================
 
 try:
-    df_raw = leer_csv_robusto(archivo)
+    df_raw = leer_archivo_robusto(archivo)
 except Exception as e:
     st.error(f"No pude leer el archivo: {e}")
     st.stop()

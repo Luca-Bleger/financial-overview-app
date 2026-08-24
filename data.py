@@ -51,7 +51,38 @@ def calcular_variacion(actual, anterior):
 # INGESTA FLEXIBLE DE CSV
 # ---------------------------------------------------------------------
 
-def leer_csv_robusto(archivo):
+def leer_archivo_robusto(archivo):
+    """Lee el archivo subido, sea CSV o Excel (.xlsx/.xls).
+
+    Es común que un CSV termine convertido a Excel sin querer (por ejemplo,
+    si se abrió con Google Sheets en el celular y se volvió a guardar), así
+    que esta función detecta el tipo real de archivo en vez de asumir CSV
+    por la extensión.
+    """
+
+    nombre = getattr(archivo, "name", "") or ""
+    es_excel_por_nombre = nombre.lower().endswith((".xlsx", ".xls"))
+
+    archivo.seek(0)
+    firma = archivo.read(4)
+    archivo.seek(0)
+    # Los .xlsx son en realidad un .zip (firma "PK\x03\x04"); los .xls viejos
+    # (formato binario OLE) arrancan con "\xD0\xCF\x11\xE0".
+    es_excel_por_contenido = firma[:2] == b"PK" or firma[:4] == b"\xd0\xcf\x11\xe0"
+
+    if es_excel_por_nombre or es_excel_por_contenido:
+        try:
+            archivo.seek(0)
+            return pd.read_excel(archivo)
+        except Exception as e:
+            raise ValueError(
+                f"El archivo parece ser Excel pero no pude leerlo. Detalle: {e}"
+            )
+
+    return _leer_csv_robusto(archivo)
+
+
+def _leer_csv_robusto(archivo):
     """Intenta leer el CSV probando separadores y encodings comunes en
     exports bancarios (utf-8, latin-1, separado por coma o por punto y coma)."""
 
@@ -72,7 +103,7 @@ def leer_csv_robusto(archivo):
         except Exception as e:
             ultimo_error = e
 
-    raise ValueError(f"No pude leer el archivo como CSV. Detalle: {ultimo_error}")
+    raise ValueError(f"No pude leer el archivo como CSV ni como Excel. Detalle: {ultimo_error}")
 
 
 def _normalizar_texto(s):
