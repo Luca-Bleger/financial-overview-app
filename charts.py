@@ -1,6 +1,9 @@
-"""Gráficos Plotly, todos pensados para ser responsive (se usan siempre con
-use_container_width=True en la app) y compartir la misma paleta de colores
-que ya definimos para el dashboard.
+"""Gráficos Plotly, pensados para ser responsive de verdad (celular y compu):
+se usan siempre con width="stretch" en la app, y ninguna leyenda se ubica
+fuera del área 0-1 de "paper" (eso es lo que rompía la leyenda del donut en
+pantallas angostas — quedaba dibujada afuera del ancho visible). Todas las
+leyendas van centradas debajo del gráfico, donde Plotly las envuelve en
+varias líneas si no entran en una sola.
 """
 
 import numpy as np
@@ -26,8 +29,20 @@ LAYOUT_BASE = dict(
     paper_bgcolor=PANEL,
     plot_bgcolor=PANEL,
     font=dict(family="Arial, sans-serif", color=BLANCO),
-    margin=dict(l=10, r=10, t=50, b=10),
-    hoverlabel=dict(bgcolor="#1B2940", bordercolor=BORDE, font_size=13, font_color=BLANCO),
+    autosize=True,
+    # dragmode=False evita que un swipe para hacer scroll de la página en el
+    # celular quede "atrapado" por el gráfico como un arrastre de zoom (eso
+    # dejaba el gráfico de evolución trabado en un rango minúsculo y vacío).
+    # El pellizco de dos dedos y los botones de zoom de la barra de
+    # herramientas siguen funcionando igual — esto solo afecta el gesto de
+    # un solo dedo, que ahora pasa de largo como scroll normal de la página.
+    dragmode=False,
+    hoverlabel=dict(bgcolor="#1B2940", bordercolor=BORDE, font_size=14, font_color=BLANCO),
+)
+
+LEYENDA_ABAJO = dict(
+    orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5,
+    font=dict(color=TEXTO, size=12),
 )
 
 
@@ -46,17 +61,18 @@ def grafico_evolucion(resumen):
     ]:
         fig.add_trace(go.Scatter(
             x=labels, y=resumen[columna], mode="lines+markers", name=nombre,
-            line=dict(color=color, width=2.5), marker=dict(size=7, color=color),
+            line=dict(color=color, width=2.5), marker=dict(size=8, color=color),
             hovertemplate=f"<b>{nombre}</b><br>%{{x}}<br><b>$%{{y:,.0f}}</b><extra></extra>",
         ))
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=380,
-        hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(color=TEXTO)),
-        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO)),
-        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO), tickformat=".2s"),
+        height=360,
+        margin=dict(l=10, r=10, t=20, b=70),
+        hovermode="closest",
+        legend=LEYENDA_ABAJO,
+        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=13)),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), tickformat=".2s"),
     )
     return fig
 
@@ -73,11 +89,12 @@ def grafico_donut(gastos_categoria):
             labels=categorias, values=valores, hole=0.62,
             sort=False, textinfo="percent", textfont=dict(color=BLANCO, size=12),
             marker=dict(colors=COLORES_CATEGORIA[:len(categorias)], line=dict(color=PANEL, width=3)),
+            domain=dict(x=[0.1, 0.9], y=[0.28, 1]),
             hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent:.1%}<extra></extra>",
         ))
         fig.add_annotation(
             text=f"<b>${total:,.0f}</b><br><span style='font-size:11px;color:{TEXTO_SECUNDARIO}'>Total gastado</span>",
-            x=0.5, y=0.5, showarrow=False, font=dict(size=16, color=BLANCO),
+            x=0.5, y=0.64, showarrow=False, font=dict(size=16, color=BLANCO),
         )
     else:
         fig.add_annotation(text="Sin gastos registrados", x=0.5, y=0.5, showarrow=False,
@@ -85,9 +102,10 @@ def grafico_donut(gastos_categoria):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=380,
+        height=460,
+        margin=dict(l=10, r=10, t=10, b=10),
         showlegend=True,
-        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.05, font=dict(color=TEXTO, size=11)),
+        legend=dict(orientation="v", yanchor="top", y=0.24, xanchor="center", x=0.5, font=dict(color=TEXTO, size=12)),
     )
     return fig
 
@@ -107,11 +125,12 @@ def grafico_categorias_tiempo(cat_mes):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=420,
+        height=460,
+        margin=dict(l=10, r=10, t=20, b=120),
         barmode="stack",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(color=TEXTO, size=11)),
-        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO)),
-        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO), tickformat=".2s"),
+        legend=LEYENDA_ABAJO,
+        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=13)),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), tickformat=".2s"),
     )
     return fig
 
@@ -129,9 +148,10 @@ def grafico_tasa_ahorro(resumen):
 
     fig.update_layout(
         **LAYOUT_BASE,
-        height=340,
-        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO)),
-        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO), ticksuffix="%"),
+        height=320,
+        margin=dict(l=10, r=10, t=20, b=40),
+        xaxis=dict(showgrid=False, tickfont=dict(color=TEXTO, size=13)),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), ticksuffix="%"),
     )
     return fig
 
@@ -140,18 +160,21 @@ def grafico_top_gastos(df_solo_gastos, periodo_seleccionado, top_n=8):
     df_periodo = df_solo_gastos[df_solo_gastos["periodo"] == periodo_seleccionado]
     top = df_periodo.nlargest(top_n, "importe")[["descripcion", "importe", "categoria"]]
     top = top.sort_values("importe")
+    etiquetas = [d if len(d) <= 22 else d[:20] + "…" for d in top["descripcion"]]
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=top["importe"], y=top["descripcion"], orientation="h",
+        x=top["importe"], y=etiquetas, orientation="h",
         marker=dict(color=GASTOS_COLOR),
-        hovertemplate="<b>%{y}</b><br>$%{x:,.0f}<extra></extra>",
+        customdata=top["descripcion"],
+        hovertemplate="<b>%{customdata}</b><br>$%{x:,.0f}<extra></extra>",
     ))
 
     fig.update_layout(
         **LAYOUT_BASE,
         height=340,
-        xaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO), tickformat=".2s"),
-        yaxis=dict(tickfont=dict(color=TEXTO, size=11)),
+        margin=dict(l=10, r=10, t=20, b=30),
+        xaxis=dict(gridcolor="rgba(148,163,184,0.10)", tickfont=dict(color=TEXTO_SECUNDARIO, size=12), tickformat=".2s"),
+        yaxis=dict(tickfont=dict(color=TEXTO, size=12)),
     )
     return fig
