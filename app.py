@@ -194,10 +194,17 @@ st.markdown("""
         to { transform: translateY(18px) scale(1.1); }
     }
 
+    /* El degradado de texto (background-clip:text + text-fill-color
+       transparent) rompe el color de los emojis si están adentro del mismo
+       elemento — el emoji queda "hueco"/sin color en vez de mostrarse a
+       todo color. Por eso el degradado va en un <span> aparte que envuelve
+       solo las palabras, y el emoji queda afuera con su color normal. */
     .hero-titulo {
         font-size: 2.6rem;
         font-weight: 800;
         margin-bottom: 0;
+    }
+    .hero-titulo-texto {
         background: linear-gradient(90deg, #F8FAFC 0%, #8FA1BC 100%);
         -webkit-background-clip: text;
         background-clip: text;
@@ -400,7 +407,7 @@ if st.session_state.vista == "inicio":
     st.markdown("""
         <div class="hero-wrap">
             <div class="hero-fondo"></div>
-            <div class="hero-titulo">💰 Financial Overview</div>
+            <div class="hero-titulo">💰 <span class="hero-titulo-texto">Financial Overview</span></div>
             <div class="hero-accent"></div>
             <div class="hero-subtitulo">Tu copiloto financiero: subí un resumen y en segundos tenés
                 gráficos, categorías, proyecciones de ahorro y respuestas a tus preguntas.</div>
