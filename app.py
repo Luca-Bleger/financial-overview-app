@@ -487,7 +487,7 @@ if st.session_state.vista == "portada":
             </div>
             <div class="portada-feature-item">
                 <span class="icono">🔒</span>
-                <span class="texto">Tus datos, tu cuenta</span>
+                <span class="texto">Tus datos,<br/>tu cuenta</span>
             </div>
             <div class="portada-feature-item">
                 <span class="icono">🎯</span>
