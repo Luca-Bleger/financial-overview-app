@@ -494,6 +494,10 @@ if st.session_state.vista == "portada":
                 <span class="icono">🎯</span>
                 <span class="texto">Metas y proyecciones</span>
             </div>
+            <div class="portada-feature-item">
+                <span class="icono">💬</span>
+                <span class="texto">Preguntale a tus datos</span>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
