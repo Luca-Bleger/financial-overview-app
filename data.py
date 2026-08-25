@@ -470,6 +470,69 @@ def detectar_gastos_fijos(df_movimientos, minimo_meses=2):
     return fijos.reset_index(drop=True)
 
 
+def construir_plan_inicial(df_movimientos, df_solo_gastos):
+    """Arma la tabla editable de planificación: una fila por cada gasto fijo
+    detectado, más una fila por categoría con el promedio mensual del resto
+    (gasto variable). Es solo el punto de partida — el usuario la puede
+    editar libremente después (agregar, borrar, modificar montos)."""
+    fijos = detectar_gastos_fijos(df_movimientos)
+    descripciones_fijas = set(fijos["descripcion"]) if not fijos.empty else set()
+
+    filas = []
+    for _, fila in fijos.iterrows():
+        filas.append({
+            "descripcion": fila["descripcion"],
+            "categoria": fila["categoria"],
+            "tipo": "Fijo",
+            "monto": round(float(fila["promedio"]), -2),
+        })
+
+    variable = df_solo_gastos[~df_solo_gastos["descripcion"].isin(descripciones_fijas)]
+    if not variable.empty:
+        n_periodos = max(variable["periodo"].nunique(), 1)
+        por_categoria = variable.groupby("categoria")["importe"].sum() / n_periodos
+        for categoria, monto in por_categoria.items():
+            if monto > 0:
+                filas.append({
+                    "descripcion": f"{categoria} (variable, promedio)",
+                    "categoria": categoria,
+                    "tipo": "Variable",
+                    "monto": round(float(monto), -2),
+                })
+
+    return pd.DataFrame(filas, columns=["descripcion", "categoria", "tipo", "monto"])
+
+
+def sugerir_recortes(df_plan, objetivo_ahorro_extra, recorte_maximo_pct=0.5):
+    """Reglas simples (sin IA) para responder "si quiero ahorrar $X más,
+    ¿qué gasto debería recortar?": ataca primero los gastos variables más
+    grandes, sin proponer recortar más de la mitad de ninguno — los gastos
+    fijos no se tocan, porque por definición son más difíciles de bajar."""
+    if df_plan is None or df_plan.empty or objetivo_ahorro_extra <= 0:
+        return [], objetivo_ahorro_extra
+
+    variables = df_plan[(df_plan["tipo"] == "Variable") & (df_plan["monto"] > 0)]
+    variables = variables.sort_values("monto", ascending=False)
+
+    restante = objetivo_ahorro_extra
+    sugerencias = []
+    for _, fila in variables.iterrows():
+        if restante <= 0:
+            break
+        tope = fila["monto"] * recorte_maximo_pct
+        recorte = min(tope, restante)
+        if recorte >= 1:
+            sugerencias.append({
+                "descripcion": fila["descripcion"],
+                "monto_actual": fila["monto"],
+                "recorte_sugerido": recorte,
+                "monto_nuevo": fila["monto"] - recorte,
+            })
+            restante -= recorte
+
+    return sugerencias, max(restante, 0)
+
+
 def proyectar_ahorro(resumen, monto_objetivo, meses_deseados=None):
     """Proyección simple de ahorro: a partir del saldo promedio de los meses
     ya cargados, estima cuánto tardarías en juntar `monto_objetivo`, y si se

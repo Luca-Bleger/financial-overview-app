@@ -6,10 +6,10 @@ import streamlit as st
 from data import (
     FREQ_POR_GRANULARIDAD, MESES_ES, REGLAS_CATEGORIAS, aplicar_correcciones,
     calcular_variacion, clave_movimiento, construir_movimientos,
-    detectar_gastos_fijos, gastos_categoria_por_mes, gastos_por_categoria,
+    construir_plan_inicial, gastos_categoria_por_mes, gastos_por_categoria,
     leer_archivo_robusto, mapeo_fijo_pdf_mercadopago, periodo_anterior_de,
     proyectar_ahorro, resumen_por_granularidad, resumen_por_periodo,
-    sin_clasificar_frecuentes, sugerencias_de_mapeo,
+    sin_clasificar_frecuentes, sugerencias_de_mapeo, sugerir_recortes,
 )
 from charts import (
     grafico_categorias_tiempo, grafico_comparacion_meses, grafico_donut,
@@ -874,85 +874,86 @@ if st.session_state.get("subvista_planificacion", False):
         "movimientos que ya cargaste. Cálculo directo, sin IA."
     )
 
-    gastos_fijos = detectar_gastos_fijos(df_movimientos)
-    total_fijos = 0.0
-    descripciones_fijas = set()
-
-    with st.container(border=True):
-        st.markdown("##### 🔒 Tus gastos fijos detectados")
-        if gastos_fijos.empty:
-            st.caption(
-                "Todavía no detecto gastos que se repitan en 2 o más meses distintos — a medida "
-                "que cargues más meses, los vamos a poder identificar acá."
-            )
-        else:
-            st.caption(
-                "Movimientos con la misma descripción en 2 o más meses — la señal de un gasto "
-                "recurrente (alquiler, cuota, suscripción). Destildá el que no corresponda."
-            )
-            for _, fila in gastos_fijos.iterrows():
-                incluido = st.checkbox(
-                    f"**{fila['descripcion']}** ({fila['categoria']}) — "
-                    f"${fila['promedio']:,.0f}/mes, visto en {fila['meses']:.0f} meses",
-                    value=True, key=f"fijo_{fila['descripcion']}",
-                )
-                if incluido:
-                    total_fijos += fila["promedio"]
-                    descripciones_fijas.add(fila["descripcion"])
-            st.markdown(f"**Total de gastos fijos: ${total_fijos:,.0f} por mes**")
+    if "plan_gastos" not in st.session_state:
+        st.session_state.plan_gastos = construir_plan_inicial(df_movimientos, df_solo_gastos)
 
     with st.container(border=True):
         st.markdown("##### 📅 Planificar el próximo mes")
         st.caption(
-            "Los gastos fijos ya se descuentan solos. Ingresá tu ingreso esperado y cuánto "
-            "esperás gastar en el resto (variable), y te mostramos cómo se distribuiría según tu "
-            "historial."
+            "Esta tabla arranca con tus gastos fijos detectados y el promedio histórico por "
+            "categoría — pero es toda tuya: agregá una fila nueva, borrá la que no corresponda, "
+            "o cambiale el monto para armar tu propio escenario del próximo mes."
         )
 
+        if st.button("↺ Reiniciar con mis valores históricos", key="reset_plan_gastos"):
+            st.session_state.plan_gastos = construir_plan_inicial(df_movimientos, df_solo_gastos)
+            st.rerun()
+
+        categorias_plan = sorted(
+            set(REGLAS_CATEGORIAS.keys()) | set(st.session_state.plan_gastos["categoria"]) | {"Otro"}
+        )
+        editado_plan = st.data_editor(
+            st.session_state.plan_gastos,
+            num_rows="dynamic",
+            column_config={
+                "descripcion": st.column_config.TextColumn("Descripción"),
+                "categoria": st.column_config.SelectboxColumn("Categoría", options=categorias_plan),
+                "tipo": st.column_config.SelectboxColumn("Tipo", options=["Fijo", "Variable"]),
+                "monto": st.column_config.NumberColumn("Monto mensual ($)", format="$%.0f", min_value=0.0, step=1000.0),
+            },
+            width="stretch",
+            hide_index=True,
+            key="editor_plan_gastos",
+        )
+        st.session_state.plan_gastos = editado_plan
+
+        gasto_total_plan = editado_plan["monto"].sum() if not editado_plan.empty else 0.0
         promedio_ingreso_historico = resumen["Ingreso"].mean() if not resumen.empty else 0.0
-        df_variable_historico = df_solo_gastos[~df_solo_gastos["descripcion"].isin(descripciones_fijas)]
-        gasto_variable_historico_mensual = (
-            df_variable_historico.groupby("periodo")["importe"].sum().mean()
-            if not df_variable_historico.empty else 0.0
+        ingreso_plan = st.number_input(
+            "Ingresos esperados este mes ($)", min_value=0.0, step=10000.0,
+            value=float(round(promedio_ingreso_historico, -2)), key="ingreso_plan",
         )
 
-        col_ing_plan, col_var_plan = st.columns(2)
-        with col_ing_plan:
-            ingreso_plan = st.number_input(
-                "Ingresos esperados este mes ($)", min_value=0.0, step=10000.0,
-                value=float(round(promedio_ingreso_historico, -2)), key="ingreso_plan",
-            )
-        with col_var_plan:
-            gasto_variable_plan = st.number_input(
-                "Gastos variables esperados, sin contar los fijos ($)", min_value=0.0, step=10000.0,
-                value=float(round(gasto_variable_historico_mensual, -2)), key="gasto_variable_plan",
-            )
-
-        st.metric("Gastos fijos (detectados automáticamente)", f"${total_fijos:,.0f}")
-
-        distribucion_historica = df_variable_historico.groupby("categoria")["importe"].sum()
-        distribucion_historica = distribucion_historica[distribucion_historica > 0].sort_values(ascending=False)
-        total_historico_variable = distribucion_historica.sum()
-
-        if total_historico_variable > 0 and gasto_variable_plan > 0:
-            st.markdown(f"Así se distribuirían tus **${gasto_variable_plan:,.0f}** de gastos variables, según tu historial:")
-            for categoria, monto_historico in distribucion_historica.items():
-                porcentaje = monto_historico / total_historico_variable
-                monto_sugerido = porcentaje * gasto_variable_plan
-                st.progress(min(porcentaje, 1.0), text=f"{categoria} — ${monto_sugerido:,.0f} ({porcentaje * 100:.0f}%)")
-
-        saldo_plan = ingreso_plan - total_fijos - gasto_variable_plan
+        saldo_plan = ingreso_plan - gasto_total_plan
         tasa_plan = (saldo_plan / ingreso_plan * 100) if ingreso_plan else 0
-        if saldo_plan >= 0:
-            st.success(
-                f"Con estos números (fijos + variables), terminarías el mes con "
-                f"**${saldo_plan:,.0f}** de saldo (tasa de ahorro proyectada: {tasa_plan:.1f}%)."
-            )
+
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.metric("Gastos proyectados (tabla)", f"${gasto_total_plan:,.0f}")
+        col_m2.metric("Saldo proyectado", f"${saldo_plan:,.0f}")
+        col_m3.metric("Tasa de ahorro proyectada", f"{tasa_plan:.1f}%")
+
+        if saldo_plan < 0:
+            st.warning("Con esta tabla, tus gastos proyectados superan tus ingresos esperados.")
+
+    with st.container(border=True):
+        st.markdown("##### 💡 ¿Querés ahorrar más? Te digo qué gasto achicar")
+        st.caption(
+            "Reglas simples sobre tu propia tabla de arriba — no es una IA real, pero te dice "
+            "concretamente qué gasto variable convendría recortar y cuánto, sin tocar los fijos."
+        )
+        objetivo_ahorro_extra = st.number_input(
+            "¿Cuánto más te gustaría ahorrar este mes, por encima de lo que ya proyectás arriba? ($)",
+            min_value=0.0, step=5000.0, value=0.0, key="objetivo_ahorro_extra",
+        )
+        if objetivo_ahorro_extra > 0:
+            sugerencias_recorte, restante_sin_cubrir = sugerir_recortes(editado_plan, objetivo_ahorro_extra)
+            if sugerencias_recorte:
+                st.markdown(f"Para ahorrar **\\${objetivo_ahorro_extra:,.0f}** más, te conviene recortar:")
+                for sugerencia in sugerencias_recorte:
+                    st.markdown(
+                        f"- **{sugerencia['descripcion']}**: de \\${sugerencia['monto_actual']:,.0f} a "
+                        f"\\${sugerencia['monto_nuevo']:,.0f} (↓ \\${sugerencia['recorte_sugerido']:,.0f})"
+                    )
+            if restante_sin_cubrir >= 1:
+                st.info(
+                    f"Recortando gastos variables llegás hasta ahí — todavía te faltarían "
+                    f"${restante_sin_cubrir:,.0f}. Para el resto tendrías que tocar algún gasto "
+                    "fijo de la tabla, o aumentar tus ingresos."
+                )
+            elif sugerencias_recorte:
+                st.success("¡Con esos recortes alcanzás la meta de ahorro extra!")
         else:
-            st.warning(
-                f"Con estos números, terminarías el mes en **-${abs(saldo_plan):,.0f}** — entre "
-                "gastos fijos y variables superás tus ingresos esperados."
-            )
+            st.caption("Poné un monto arriba para ver sugerencias concretas de qué recortar.")
 
     with st.container(border=True):
         st.markdown("##### 🎯 ¿Cuánto necesito ahorrar para comprar algo?")
