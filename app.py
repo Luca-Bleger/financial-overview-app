@@ -173,9 +173,9 @@ st.markdown("""
         box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     }
     div[data-testid="stButton"] button[kind="primary"] {
-        font-size: 1.75rem;
+        font-size: 2.1rem;
         font-weight: 800;
-        padding: 1rem 1.4rem;
+        padding: 1.1rem 1.5rem;
     }
 
     /* Fondo decorativo de la pantalla inicial: dos manchas de gradiente
@@ -377,7 +377,7 @@ st.markdown("""
         flex-wrap: wrap;
         justify-content: center;
         gap: 14px;
-        margin-top: 44px;
+        margin: 44px auto 0 auto;
         max-width: 780px;
         z-index: 1;
         position: relative;
