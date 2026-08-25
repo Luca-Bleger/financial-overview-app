@@ -406,6 +406,7 @@ st.markdown("""
         font-size: 0.85rem;
         color: #9FB4CE;
         font-weight: 600;
+        text-align: center;
     }
 
     /* Streamlit no apila st.columns solo en pantallas angostas: sin esto,
