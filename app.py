@@ -374,11 +374,12 @@ st.markdown("""
        hace la app. */
     .portada-features {
         display: flex;
-        flex-direction: column;
-        align-items: center;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
         gap: 12px;
         margin: 44px auto 0 auto;
-        max-width: 360px;
+        max-width: 820px;
         z-index: 1;
         position: relative;
     }
@@ -386,8 +387,8 @@ st.markdown("""
         display: flex;
         flex-direction: row;
         align-items: center;
-        gap: 14px;
-        width: 100%;
+        gap: 10px;
+        width: auto;
         padding: 14px 20px;
         border-radius: 14px;
         background: rgba(21, 32, 51, 0.6);
@@ -396,7 +397,7 @@ st.markdown("""
         transition: transform 0.2s ease, border-color 0.2s ease;
     }
     .portada-feature-item:hover {
-        transform: translateX(4px);
+        transform: translateY(-3px);
         border-color: #67D2D0;
     }
     .portada-feature-item .icono {
