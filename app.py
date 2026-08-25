@@ -374,21 +374,21 @@ st.markdown("""
        hace la app. */
     .portada-features {
         display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 14px;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
         margin: 44px auto 0 auto;
-        max-width: 780px;
+        max-width: 360px;
         z-index: 1;
         position: relative;
     }
     .portada-feature-item {
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         align-items: center;
-        gap: 6px;
-        width: 150px;
-        padding: 16px 12px;
+        gap: 14px;
+        width: 100%;
+        padding: 14px 20px;
         border-radius: 14px;
         background: rgba(21, 32, 51, 0.6);
         border: 1px solid #263752;
@@ -396,17 +396,17 @@ st.markdown("""
         transition: transform 0.2s ease, border-color 0.2s ease;
     }
     .portada-feature-item:hover {
-        transform: translateY(-3px);
+        transform: translateX(4px);
         border-color: #67D2D0;
     }
     .portada-feature-item .icono {
-        font-size: 1.6rem;
+        font-size: 1.5rem;
     }
     .portada-feature-item .texto {
-        font-size: 0.85rem;
+        font-size: 0.9rem;
         color: #9FB4CE;
         font-weight: 600;
-        text-align: center;
+        text-align: left;
     }
 
     /* Streamlit no apila st.columns solo en pantallas angostas: sin esto,
@@ -487,7 +487,7 @@ if st.session_state.vista == "portada":
             </div>
             <div class="portada-feature-item">
                 <span class="icono">🔒</span>
-                <span class="texto">Tus datos,<br/>tu cuenta</span>
+                <span class="texto">Tus datos, tu cuenta</span>
             </div>
             <div class="portada-feature-item">
                 <span class="icono">🎯</span>
