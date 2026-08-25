@@ -192,9 +192,9 @@ def grafico_donut(gastos_categoria):
             hovertemplate="<b>%{customdata}</b><br>$%{value:,.0f}<br>%{percent:.1%}<extra></extra>",
         ))
         fig.add_annotation(
-            text=f"<b>${total:,.0f}</b><br><span style='font-size:13px;color:{TEXTO_SECUNDARIO}'>Total gastado</span>",
+            text=f"<b>${total:,.0f}</b><br><span style='font-size:15px;color:{TEXTO_SECUNDARIO}'>Total gastado</span>",
             x=0.275, y=0.5, xref="paper", yref="paper", xanchor="center", yanchor="middle",
-            showarrow=False, font=dict(size=21, color=BLANCO),
+            showarrow=False, font=dict(size=27, color=BLANCO),
         )
     else:
         fig.add_annotation(text="Sin gastos registrados", x=0.5, y=0.5, showarrow=False,
@@ -207,7 +207,7 @@ def grafico_donut(gastos_categoria):
         showlegend=True,
         legend=dict(
             orientation="v", yanchor="middle", y=0.5, xanchor="left", x=0.58,
-            font=dict(color=TEXTO, size=17), itemwidth=40, tracegroupgap=6,
+            font=dict(color=TEXTO, size=20), itemwidth=40, tracegroupgap=8,
         ),
     )
     return fig

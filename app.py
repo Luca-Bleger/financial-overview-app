@@ -1040,6 +1040,42 @@ with tab_movimientos:
         | {"Ingresos", "Sin clasificar", "Movimiento interno"}
     )
 
+    # --- Clasificar lo que falta: todos los "Sin clasificar" juntos, de
+    # cualquier mes, en un solo lugar — para ir limpiándolos todos de una
+    # sentada en vez de tener que cambiar de mes uno por uno. Cada
+    # corrección se guarda igual que en la tabla de abajo (a la base si hay
+    # cuenta, o a la sesión en modo demo), así que actualiza todo el
+    # dashboard al instante.
+    df_sin_clasificar = df_movimientos[df_movimientos["categoria"] == "Sin clasificar"].sort_values("fecha").reset_index(drop=True)
+    if not df_sin_clasificar.empty:
+        with st.container(border=True):
+            st.markdown("##### 🗂️ Clasificar lo que falta")
+            st.caption(
+                f"Tenés **{len(df_sin_clasificar)}** movimiento(s) sin clasificar, de todos los meses "
+                "juntos acá. Asignales categoría y se actualiza al instante en todos los gráficos y KPIs."
+            )
+            editado_sc = st.data_editor(
+                df_sin_clasificar[["fecha", "descripcion", "importe", "categoria"]],
+                column_config={
+                    "categoria": st.column_config.SelectboxColumn("categoria", options=categorias_existentes),
+                    "importe": st.column_config.NumberColumn("importe", format="$%.0f"),
+                },
+                disabled=["fecha", "descripcion", "importe"],
+                width="stretch",
+                hide_index=True,
+                key="editor_sin_clasificar",
+            )
+            cambios_sc = editado_sc["categoria"] != df_sin_clasificar["categoria"]
+            if cambios_sc.any():
+                if usuario_id is not None:
+                    for id_mov, nueva_categoria in zip(df_sin_clasificar[cambios_sc]["id"], editado_sc["categoria"][cambios_sc]):
+                        db.actualizar_categoria(usuario_id, id_mov, nueva_categoria)
+                else:
+                    claves_cambiadas_sc = df_sin_clasificar[cambios_sc].apply(clave_movimiento, axis=1)
+                    for clave, nueva_categoria in zip(claves_cambiadas_sc, editado_sc["categoria"][cambios_sc]):
+                        st.session_state.correcciones_categoria[clave] = nueva_categoria
+                st.rerun()
+
     filtro_categoria = st.selectbox(
         "Filtrar por categoría", ["Todas"] + categorias_existentes, key="filtro_categoria_movimientos",
     )
