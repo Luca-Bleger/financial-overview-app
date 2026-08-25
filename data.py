@@ -398,6 +398,25 @@ def sin_clasificar_frecuentes(df_movimientos, minimo=2):
     return agrupado[agrupado["cantidad"] >= minimo]
 
 
+def detectar_gastos_fijos(df_movimientos, minimo_meses=2):
+    """Detecta gastos "fijos": la misma descripción apareciendo como gasto
+    en 2 o más meses distintos — la señal más simple de un gasto recurrente
+    (alquiler, cuota, suscripción) en vez de uno puntual. El promedio se
+    calcula solo sobre esas apariciones, para estimar cuánto sale por mes."""
+    gastos = df_movimientos[df_movimientos["tipo"] == "Gasto"].copy()
+    gastos["importe_abs"] = gastos["importe"].abs()
+    if gastos.empty:
+        return pd.DataFrame(columns=["descripcion", "categoria", "meses", "promedio"])
+
+    agrupado = gastos.groupby("descripcion").agg(
+        meses=("periodo", "nunique"),
+        promedio=("importe_abs", "mean"),
+        categoria=("categoria", "first"),
+    ).reset_index()
+    fijos = agrupado[agrupado["meses"] >= minimo_meses].sort_values("promedio", ascending=False)
+    return fijos.reset_index(drop=True)
+
+
 def proyectar_ahorro(resumen, monto_objetivo, meses_deseados=None):
     """Proyección simple de ahorro: a partir del saldo promedio de los meses
     ya cargados, estima cuánto tardarías en juntar `monto_objetivo`, y si se

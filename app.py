@@ -6,10 +6,10 @@ import streamlit as st
 from data import (
     FREQ_POR_GRANULARIDAD, MESES_ES, REGLAS_CATEGORIAS, aplicar_correcciones,
     calcular_variacion, clave_movimiento, construir_movimientos,
-    gastos_categoria_por_mes, gastos_por_categoria, leer_archivo_robusto,
-    mapeo_fijo_pdf_mercadopago, periodo_anterior_de, proyectar_ahorro,
-    resumen_por_granularidad, resumen_por_periodo, sin_clasificar_frecuentes,
-    sugerencias_de_mapeo,
+    detectar_gastos_fijos, gastos_categoria_por_mes, gastos_por_categoria,
+    leer_archivo_robusto, mapeo_fijo_pdf_mercadopago, periodo_anterior_de,
+    proyectar_ahorro, resumen_por_granularidad, resumen_por_periodo,
+    sin_clasificar_frecuentes, sugerencias_de_mapeo,
 )
 from charts import (
     grafico_categorias_tiempo, grafico_comparacion_meses, grafico_donut,
@@ -568,6 +568,7 @@ st.markdown("## 💰 Financial Overview")
 if st.button("← Volver al inicio"):
     st.session_state.vista = "inicio"
     st.session_state.usar_ejemplo = False
+    st.session_state.subvista_planificacion = False
     st.rerun()
 
 usuario_id = None
@@ -778,11 +779,192 @@ k4.metric("📈 Tasa de ahorro", f"{tasa_ahorro:.1f}%")
 
 
 # =========================================================
+# PLANIFICACIÓN: pantalla aparte del dashboard con pestañas — usa los
+# mismos movimientos ya cargados, pero vive en su propio espacio en vez de
+# competir por lugar con Resumen/Categorías/etc.
+# =========================================================
+
+if st.session_state.get("subvista_planificacion", False):
+    if st.button("← Volver al dashboard"):
+        st.session_state.subvista_planificacion = False
+        st.rerun()
+
+    st.markdown("## 📅 Planificación financiera")
+    st.caption(
+        "Pantalla aparte del resto del dashboard, pensada para planificar — usa los mismos "
+        "movimientos que ya cargaste. Cálculo directo, sin IA."
+    )
+
+    gastos_fijos = detectar_gastos_fijos(df_movimientos)
+    total_fijos = 0.0
+    descripciones_fijas = set()
+
+    with st.container(border=True):
+        st.markdown("##### 🔒 Tus gastos fijos detectados")
+        if gastos_fijos.empty:
+            st.caption(
+                "Todavía no detecto gastos que se repitan en 2 o más meses distintos — a medida "
+                "que cargues más meses, los vamos a poder identificar acá."
+            )
+        else:
+            st.caption(
+                "Movimientos con la misma descripción en 2 o más meses — la señal de un gasto "
+                "recurrente (alquiler, cuota, suscripción). Destildá el que no corresponda."
+            )
+            for _, fila in gastos_fijos.iterrows():
+                incluido = st.checkbox(
+                    f"**{fila['descripcion']}** ({fila['categoria']}) — "
+                    f"${fila['promedio']:,.0f}/mes, visto en {fila['meses']:.0f} meses",
+                    value=True, key=f"fijo_{fila['descripcion']}",
+                )
+                if incluido:
+                    total_fijos += fila["promedio"]
+                    descripciones_fijas.add(fila["descripcion"])
+            st.markdown(f"**Total de gastos fijos: ${total_fijos:,.0f} por mes**")
+
+    with st.container(border=True):
+        st.markdown("##### 📅 Planificar el próximo mes")
+        st.caption(
+            "Los gastos fijos ya se descuentan solos. Ingresá tu ingreso esperado y cuánto "
+            "esperás gastar en el resto (variable), y te mostramos cómo se distribuiría según tu "
+            "historial."
+        )
+
+        promedio_ingreso_historico = resumen["Ingreso"].mean() if not resumen.empty else 0.0
+        df_variable_historico = df_solo_gastos[~df_solo_gastos["descripcion"].isin(descripciones_fijas)]
+        gasto_variable_historico_mensual = (
+            df_variable_historico.groupby("periodo")["importe"].sum().mean()
+            if not df_variable_historico.empty else 0.0
+        )
+
+        col_ing_plan, col_var_plan = st.columns(2)
+        with col_ing_plan:
+            ingreso_plan = st.number_input(
+                "Ingresos esperados este mes ($)", min_value=0.0, step=10000.0,
+                value=float(round(promedio_ingreso_historico, -2)), key="ingreso_plan",
+            )
+        with col_var_plan:
+            gasto_variable_plan = st.number_input(
+                "Gastos variables esperados, sin contar los fijos ($)", min_value=0.0, step=10000.0,
+                value=float(round(gasto_variable_historico_mensual, -2)), key="gasto_variable_plan",
+            )
+
+        st.metric("Gastos fijos (detectados automáticamente)", f"${total_fijos:,.0f}")
+
+        distribucion_historica = df_variable_historico.groupby("categoria")["importe"].sum()
+        distribucion_historica = distribucion_historica[distribucion_historica > 0].sort_values(ascending=False)
+        total_historico_variable = distribucion_historica.sum()
+
+        if total_historico_variable > 0 and gasto_variable_plan > 0:
+            st.markdown(f"Así se distribuirían tus **${gasto_variable_plan:,.0f}** de gastos variables, según tu historial:")
+            for categoria, monto_historico in distribucion_historica.items():
+                porcentaje = monto_historico / total_historico_variable
+                monto_sugerido = porcentaje * gasto_variable_plan
+                st.progress(min(porcentaje, 1.0), text=f"{categoria} — ${monto_sugerido:,.0f} ({porcentaje * 100:.0f}%)")
+
+        saldo_plan = ingreso_plan - total_fijos - gasto_variable_plan
+        tasa_plan = (saldo_plan / ingreso_plan * 100) if ingreso_plan else 0
+        if saldo_plan >= 0:
+            st.success(
+                f"Con estos números (fijos + variables), terminarías el mes con "
+                f"**${saldo_plan:,.0f}** de saldo (tasa de ahorro proyectada: {tasa_plan:.1f}%)."
+            )
+        else:
+            st.warning(
+                f"Con estos números, terminarías el mes en **-${abs(saldo_plan):,.0f}** — entre "
+                "gastos fijos y variables superás tus ingresos esperados."
+            )
+
+    with st.container(border=True):
+        st.markdown("##### 🎯 ¿Cuánto necesito ahorrar para comprar algo?")
+
+        col_monto, col_plazo = st.columns(2)
+        with col_monto:
+            monto_objetivo = st.number_input(
+                "Monto que querés juntar ($)", min_value=0.0, step=10000.0, value=500000.0, format="%.0f",
+            )
+        with col_plazo:
+            meses_deseados = st.number_input(
+                "¿En cuántos meses te gustaría lograrlo? (opcional)", min_value=0, step=1, value=0,
+            )
+
+        resultado = proyectar_ahorro(resumen, monto_objetivo, meses_deseados or None)
+        promedio = resultado["promedio_ahorro"]
+
+        st.markdown("---")
+        st.metric("Ahorro promedio mensual (histórico)", f"${promedio:,.0f}")
+
+        if promedio <= 0:
+            st.warning(
+                "Con tu ritmo actual no estás ahorrando (el saldo promedio de tus meses cargados es "
+                "negativo o cero), así que a este paso no vas a alcanzar la meta. Necesitarías reducir "
+                "gastos o aumentar ingresos."
+            )
+        elif monto_objetivo > 0:
+            fecha = resultado["fecha_estimada"]
+            fecha_texto = f"{MESES_ES[fecha.month]} {fecha.year}"
+            st.success(
+                f"A tu ritmo actual, vas a juntar ${monto_objetivo:,.0f} en aproximadamente "
+                f"**{resultado['meses_necesarios']} mes(es)** (alrededor de {fecha_texto})."
+            )
+
+        if meses_deseados and monto_objetivo > 0:
+            necesario = resultado["ahorro_necesario_mensual"]
+            diferencia = resultado["diferencia_mensual"]
+            st.markdown(
+                f"Para lograrlo en **{meses_deseados} mes(es)**, necesitarías ahorrar "
+                f"**${necesario:,.0f} por mes**."
+            )
+            if diferencia > 0:
+                st.info(
+                    f"Eso es ${diferencia:,.0f} más de lo que venís ahorrando en promedio — "
+                    "tendrías que ajustar gastos o sumar ingresos."
+                )
+            else:
+                st.success(f"¡Ya vas a un ritmo suficiente! Estás {abs(diferencia):,.0f} por arriba de lo necesario por mes.")
+
+    with st.container(border=True):
+        st.markdown("##### 📚 Dónde suele guardarse la plata que se ahorra")
+        st.caption(
+            "Información general para conocer las opciones más comunes — **no es una "
+            "recomendación personalizada** (no somos asesores financieros). Antes de decidir, "
+            "comparalo con tu situación y, si hace falta, consultá a un profesional matriculado."
+        )
+        col_opt1, col_opt2, col_opt3 = st.columns(3)
+        with col_opt1:
+            st.markdown("**🏦 Plazo fijo**")
+            st.caption(
+                "Depositás un monto por un plazo fijo (30 días o más) a cambio de un interés "
+                "pactado de antemano. Bajo riesgo, pero el dinero queda inmovilizado hasta el "
+                "vencimiento."
+            )
+        with col_opt2:
+            st.markdown("**📈 Fondo común de inversión**")
+            st.caption(
+                "Varias personas ponen su dinero en un fondo administrado por una sociedad "
+                "gerente, que invierte en distintos activos. Más liquidez que un plazo fijo, "
+                "pero el rendimiento no está garantizado."
+            )
+        with col_opt3:
+            st.markdown("**💵 Dólares u otra moneda**")
+            st.caption(
+                "Convertir parte del ahorro a otra moneda para cubrirse de la devaluación del "
+                "peso. No genera renta por sí solo, y tiene el riesgo de la cotización."
+            )
+
+    st.stop()
+
+if st.button("📅 Ir a Planificación financiera →"):
+    st.session_state.subvista_planificacion = True
+    st.rerun()
+
+
+# =========================================================
 # SECCIONES (apartados)
 # =========================================================
 
-tab_resumen, tab_categorias, tab_consejos, tab_preguntas, tab_proyeccion, tab_movimientos = st.tabs(
-    ["📈 Resumen", "🏷️ Categorías", "🧠 Consejos", "💬 Preguntas", "🎯 Proyección", "📋 Movimientos"]
+tab_resumen, tab_categorias, tab_consejos, tab_preguntas, tab_movimientos = st.tabs(
+    ["📈 Resumen", "🏷️ Categorías", "🧠 Consejos", "💬 Preguntas", "📋 Movimientos"]
 )
 
 with tab_resumen:
@@ -898,137 +1080,6 @@ with tab_preguntas:
         st.session_state.chat_preguntas.append({"role": "user", "content": pregunta_libre})
         st.session_state.chat_preguntas.append({"role": "assistant", "content": respuesta})
         st.rerun()
-
-with tab_proyeccion:
-    st.caption(
-        "Estimación directa a partir del ahorro promedio de los meses que ya cargaste — cálculo "
-        "simple, sin IA."
-    )
-
-    with st.container(border=True):
-        st.markdown("##### 📅 Planificar el próximo mes")
-        st.caption(
-            "Ingresá cuánto esperás ganar y gastar este mes, y te mostramos cómo se distribuiría "
-            "según tu patrón histórico de gastos por categoría."
-        )
-
-        promedio_ingreso_historico = resumen["Ingreso"].mean() if not resumen.empty else 0.0
-        promedio_gasto_historico = resumen["Gasto"].mean() if not resumen.empty else 0.0
-
-        col_ing_plan, col_gas_plan = st.columns(2)
-        with col_ing_plan:
-            ingreso_plan = st.number_input(
-                "Ingresos esperados este mes ($)", min_value=0.0, step=10000.0,
-                value=float(round(promedio_ingreso_historico, -2)), key="ingreso_plan",
-            )
-        with col_gas_plan:
-            gasto_plan = st.number_input(
-                "Gastos totales esperados este mes ($)", min_value=0.0, step=10000.0,
-                value=float(round(promedio_gasto_historico, -2)), key="gasto_plan",
-            )
-
-        distribucion_historica = df_solo_gastos.groupby("categoria")["importe"].sum()
-        distribucion_historica = distribucion_historica[distribucion_historica > 0].sort_values(ascending=False)
-        total_historico = distribucion_historica.sum()
-
-        if total_historico > 0 and gasto_plan > 0:
-            st.markdown(f"Con base en tu historial, así se distribuirían tus **${gasto_plan:,.0f}** de gastos:")
-            for categoria, monto_historico in distribucion_historica.items():
-                porcentaje = monto_historico / total_historico
-                monto_sugerido = porcentaje * gasto_plan
-                st.progress(min(porcentaje, 1.0), text=f"{categoria} — ${monto_sugerido:,.0f} ({porcentaje * 100:.0f}%)")
-
-            saldo_plan = ingreso_plan - gasto_plan
-            tasa_plan = (saldo_plan / ingreso_plan * 100) if ingreso_plan else 0
-            if saldo_plan >= 0:
-                st.success(
-                    f"Con estos números, terminarías el mes con **${saldo_plan:,.0f}** de saldo "
-                    f"(tasa de ahorro proyectada: {tasa_plan:.1f}%)."
-                )
-            else:
-                st.warning(
-                    f"Con estos números, terminarías el mes en **-${abs(saldo_plan):,.0f}** — los "
-                    "gastos esperados superan los ingresos."
-                )
-        else:
-            st.caption("Cargá algún gasto categorizado (subiendo un resumen) para ver la distribución sugerida.")
-
-    with st.container(border=True):
-        st.markdown("##### 🎯 ¿Cuánto necesito ahorrar para comprar algo?")
-
-        col_monto, col_plazo = st.columns(2)
-        with col_monto:
-            monto_objetivo = st.number_input(
-                "Monto que querés juntar ($)", min_value=0.0, step=10000.0, value=500000.0, format="%.0f",
-            )
-        with col_plazo:
-            meses_deseados = st.number_input(
-                "¿En cuántos meses te gustaría lograrlo? (opcional)", min_value=0, step=1, value=0,
-            )
-
-        resultado = proyectar_ahorro(resumen, monto_objetivo, meses_deseados or None)
-        promedio = resultado["promedio_ahorro"]
-
-        st.markdown("---")
-        st.metric("Ahorro promedio mensual (histórico)", f"${promedio:,.0f}")
-
-        if promedio <= 0:
-            st.warning(
-                "Con tu ritmo actual no estás ahorrando (el saldo promedio de tus meses cargados es "
-                "negativo o cero), así que a este paso no vas a alcanzar la meta. Necesitarías reducir "
-                "gastos o aumentar ingresos."
-            )
-        elif monto_objetivo > 0:
-            fecha = resultado["fecha_estimada"]
-            fecha_texto = f"{MESES_ES[fecha.month]} {fecha.year}"
-            st.success(
-                f"A tu ritmo actual, vas a juntar ${monto_objetivo:,.0f} en aproximadamente "
-                f"**{resultado['meses_necesarios']} mes(es)** (alrededor de {fecha_texto})."
-            )
-
-        if meses_deseados and monto_objetivo > 0:
-            necesario = resultado["ahorro_necesario_mensual"]
-            diferencia = resultado["diferencia_mensual"]
-            st.markdown(
-                f"Para lograrlo en **{meses_deseados} mes(es)**, necesitarías ahorrar "
-                f"**${necesario:,.0f} por mes**."
-            )
-            if diferencia > 0:
-                st.info(
-                    f"Eso es ${diferencia:,.0f} más de lo que venís ahorrando en promedio — "
-                    "tendrías que ajustar gastos o sumar ingresos."
-                )
-            else:
-                st.success(f"¡Ya vas a un ritmo suficiente! Estás {abs(diferencia):,.0f} por arriba de lo necesario por mes.")
-
-    with st.container(border=True):
-        st.markdown("##### 📚 Dónde suele guardarse la plata que se ahorra")
-        st.caption(
-            "Información general para conocer las opciones más comunes — **no es una "
-            "recomendación personalizada** (no somos asesores financieros). Antes de decidir, "
-            "comparalo con tu situación y, si hace falta, consultá a un profesional matriculado."
-        )
-        col_opt1, col_opt2, col_opt3 = st.columns(3)
-        with col_opt1:
-            st.markdown("**🏦 Plazo fijo**")
-            st.caption(
-                "Depositás un monto por un plazo fijo (30 días o más) a cambio de un interés "
-                "pactado de antemano. Bajo riesgo, pero el dinero queda inmovilizado hasta el "
-                "vencimiento."
-            )
-        with col_opt2:
-            st.markdown("**📈 Fondo común de inversión**")
-            st.caption(
-                "Varias personas ponen su dinero en un fondo administrado por una sociedad "
-                "gerente, que invierte en distintos activos. Más liquidez que un plazo fijo, "
-                "pero el rendimiento no está garantizado."
-            )
-        with col_opt3:
-            st.markdown("**💵 Dólares u otra moneda**")
-            st.caption(
-                "Convertir parte del ahorro a otra moneda para cubrirse de la devaluación del "
-                "peso. No genera renta por sí solo, y tiene el riesgo de la cotización."
-            )
 
 with tab_movimientos:
     st.caption(
