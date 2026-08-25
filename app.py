@@ -331,6 +331,12 @@ st.markdown("""
     .icono-flotante.i6 { top: 6%; left: 42%; animation-delay: 2.4s; font-size: 1.8rem; }
     .icono-flotante.i7 { bottom: 8%; left: 40%; animation-delay: 0.9s; font-size: 1.6rem; }
     .icono-flotante.i8 { top: 50%; right: 2%; animation-delay: 1.3s; font-size: 2rem; }
+    .icono-flotante.i9 { bottom: 4%; left: 22%; animation-delay: 1.8s; font-size: 1.5rem; }
+    .icono-flotante.i10 { bottom: 6%; right: 20%; animation-delay: 0.4s; font-size: 1.9rem; }
+    .icono-flotante.i11 { top: 30%; left: 20%; animation-delay: 2.2s; font-size: 1.4rem; }
+    .icono-flotante.i12 { top: 26%; right: 22%; animation-delay: 0.2s; font-size: 1.5rem; }
+    .icono-flotante.i13 { top: 60%; left: 8%; animation-delay: 2.6s; font-size: 1.6rem; }
+    .icono-flotante.i14 { top: 62%; right: 9%; animation-delay: 1.1s; font-size: 1.7rem; }
     @keyframes flotar-icono {
         0%, 100% { transform: translateY(0) rotate(0deg); }
         50% { transform: translateY(-14px) rotate(6deg); }
@@ -361,6 +367,45 @@ st.markdown("""
         .portada-titulo { font-size: 2.6rem; }
         .portada-tagline { font-size: 1.05rem; }
         .icono-flotante { font-size: 1.4rem !important; }
+    }
+
+    /* Franja de features debajo del botón: para que la portada no se sienta
+       vacía por debajo del "Comenzar", y para reforzar en un vistazo qué
+       hace la app. */
+    .portada-features {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 14px;
+        margin-top: 44px;
+        max-width: 780px;
+        z-index: 1;
+        position: relative;
+    }
+    .portada-feature-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        width: 150px;
+        padding: 16px 12px;
+        border-radius: 14px;
+        background: rgba(21, 32, 51, 0.6);
+        border: 1px solid #263752;
+        backdrop-filter: blur(2px);
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .portada-feature-item:hover {
+        transform: translateY(-3px);
+        border-color: #67D2D0;
+    }
+    .portada-feature-item .icono {
+        font-size: 1.6rem;
+    }
+    .portada-feature-item .texto {
+        font-size: 0.85rem;
+        color: #9FB4CE;
+        font-weight: 600;
     }
 
     /* Streamlit no apila st.columns solo en pantallas angostas: sin esto,
@@ -407,6 +452,12 @@ if st.session_state.vista == "portada":
                 <span class="icono-flotante i6">💵</span>
                 <span class="icono-flotante i7">🪙</span>
                 <span class="icono-flotante i8">🧾</span>
+                <span class="icono-flotante i9">📉</span>
+                <span class="icono-flotante i10">💹</span>
+                <span class="icono-flotante i11">🧮</span>
+                <span class="icono-flotante i12">💲</span>
+                <span class="icono-flotante i13">🏧</span>
+                <span class="icono-flotante i14">📱</span>
             </div>
             <div class="portada-titulo">Financial<br/>Overview</div>
             <div class="hero-accent" style="margin-left:auto;margin-right:auto;"></div>
@@ -422,6 +473,27 @@ if st.session_state.vista == "portada":
         if st.button("Comenzar →", width="stretch", type="primary", key="btn_portada"):
             st.session_state.vista = "auth"
             st.rerun()
+
+    st.markdown("""
+        <div class="portada-features">
+            <div class="portada-feature-item">
+                <span class="icono">🏦</span>
+                <span class="texto">Cualquier banco</span>
+            </div>
+            <div class="portada-feature-item">
+                <span class="icono">⚡</span>
+                <span class="texto">Carga rápida</span>
+            </div>
+            <div class="portada-feature-item">
+                <span class="icono">🔒</span>
+                <span class="texto">Tus datos, tu cuenta</span>
+            </div>
+            <div class="portada-feature-item">
+                <span class="icono">🎯</span>
+                <span class="texto">Metas y proyecciones</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     st.stop()
 
@@ -610,7 +682,8 @@ else:
     hay_archivo_nuevo = archivo is not None
     if hay_archivo_nuevo:
         try:
-            df_raw, tipo_fuente = leer_archivo_robusto(archivo)
+            with st.spinner("Leyendo tu archivo..."):
+                df_raw, tipo_fuente = leer_archivo_robusto(archivo)
         except Exception as e:
             st.error(f"No pude leer el archivo: {e}")
             st.stop()

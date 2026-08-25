@@ -145,8 +145,17 @@ def leer_archivo_robusto(archivo):
 
     if es_excel_por_nombre or es_excel_por_contenido:
         try:
+            # Muchos bancos meten un par de filas de metadata (titular,
+            # número de cuenta, período) ANTES de la fila real de
+            # encabezados — sin detectar esto, esa fila de metadata se leía
+            # como si fuera el encabezado y todo el mapeo salía mal.
             archivo.seek(0)
-            return pd.read_excel(archivo), "tabla"
+            vista_previa = pd.read_excel(archivo, header=None, nrows=15)
+            lineas_vista = vista_previa.astype(str).agg(" ".join, axis=1).tolist()
+            fila_encabezado = _detectar_fila_encabezado(lineas_vista)
+
+            archivo.seek(0)
+            return pd.read_excel(archivo, header=fila_encabezado), "tabla"
         except Exception as e:
             raise ValueError(
                 f"El archivo parece ser Excel pero no pude leerlo. Detalle: {e}"
@@ -161,9 +170,53 @@ def mapeo_fijo_pdf_mercadopago():
     return {"fecha": "fecha", "descripcion": "descripcion", "categoria": None, "importe": "importe"}
 
 
+_PALABRAS_FECHA = ["fecha", "date"]
+_PALABRAS_DESCRIPCION = ["descripcion", "detalle", "concepto", "movimiento", "description"]
+_PALABRAS_IMPORTE = ["importe", "monto", "amount", "valor", "debito", "credito", "debe", "haber"]
+
+
+def _detectar_fila_encabezado(lineas, max_filas=15):
+    """Bancos distintos exportan distinto: algunos meten un par de líneas de
+    metadata (titular, número de cuenta, período) ANTES de la fila real de
+    encabezados. Sin esto, esa fila de metadata se leía como si fuera el
+    encabezado real y todo el mapeo de columnas salía mal. Busca, entre las
+    primeras filas, cuál tiene más pinta de encabezado real (que mencione
+    fecha + descripción + algún campo de importe), y devuelve su número de
+    fila — 0 si ninguna se destaca, para no romper archivos que ya vienen
+    bien formados desde la primera fila."""
+
+    mejor_indice = 0
+    mejor_puntaje = 0
+    for i, linea in enumerate(lineas[:max_filas]):
+        normalizada = _normalizar_texto(linea)
+        puntaje = (
+            any(p in normalizada for p in _PALABRAS_FECHA)
+            + any(p in normalizada for p in _PALABRAS_DESCRIPCION)
+            + any(p in normalizada for p in _PALABRAS_IMPORTE)
+        )
+        if puntaje > mejor_puntaje:
+            mejor_puntaje = puntaje
+            mejor_indice = i
+    return mejor_indice if mejor_puntaje >= 2 else 0
+
+
 def _leer_csv_robusto(archivo):
     """Intenta leer el CSV probando separadores y encodings comunes en
-    exports bancarios (utf-8, latin-1, separado por coma o por punto y coma)."""
+    exports bancarios (utf-8, latin-1, separado por coma o por punto y coma),
+    saltando filas de metadata antes del encabezado real si las detecta."""
+
+    archivo.seek(0)
+    crudo = archivo.read()
+    archivo.seek(0)
+
+    texto = None
+    for encoding in ("utf-8", "latin-1"):
+        try:
+            texto = crudo.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    fila_encabezado = _detectar_fila_encabezado(texto.splitlines()) if texto else 0
 
     intentos = [
         dict(sep=None, engine="python", encoding="utf-8"),
@@ -176,7 +229,7 @@ def _leer_csv_robusto(archivo):
     for opciones in intentos:
         try:
             archivo.seek(0)
-            df = pd.read_csv(archivo, **opciones)
+            df = pd.read_csv(archivo, skiprows=fila_encabezado, **opciones)
             if df.shape[1] >= 2:
                 return df
         except Exception as e:
